@@ -14,6 +14,12 @@ async function bootstrap() {
   if (!existsSync(uploadsDir)) {
     mkdirSync(uploadsDir, { recursive: true });
   }
+  
+  // Créer le dossier uploads/tournois s'il n'existe pas
+  const tournoisUploadsDir = './uploads/tournois';
+  if (!existsSync(tournoisUploadsDir)) {
+    mkdirSync(tournoisUploadsDir, { recursive: true });
+  }
 
   const app = await NestFactory.create(AppModule);
 
@@ -49,8 +55,10 @@ async function bootstrap() {
       },
       'JWT-auth',
     )
+    .addTag('App', 'Endpoints généraux de l\'API')
     .addTag('Auth', 'Endpoints d\'authentification')
     .addTag('Users', 'Gestion des utilisateurs')
+    .addTag('Tournois', 'Gestion des tournois')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
