@@ -17,10 +17,6 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // Guard global
-  const reflector = app.get(Reflector);
-  app.useGlobalGuards(new JwtAuthGuard(reflector));
-
   // Validation globale
   app.useGlobalPipes(
     new ValidationPipe({
@@ -51,10 +47,15 @@ async function bootstrap() {
     )
     .addTag('Auth', 'Endpoints d\'authentification')
     .addTag('Users', 'Gestion des utilisateurs')
+    .addTag('SuiviEnfant', 'Suivi des enfants')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
+
+  // Guard global (après configuration Swagger pour ne pas bloquer /api et /api-json)
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new JwtAuthGuard(reflector));
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
@@ -62,3 +63,4 @@ async function bootstrap() {
   console.log(`Swagger documentation: http://localhost:${port}/api`);
 }
 bootstrap();
+   
