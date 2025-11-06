@@ -26,27 +26,34 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getClass(),
     ]);
 
-    const isAuthenticated = await super.canActivate(context) as boolean;
-    
-    if (!isAuthenticated) {
-      throw new UnauthorizedException('Token invalide ou expiré');
-    }
+    try {
+      const isAuthenticated = await super.canActivate(context) as boolean;
+      
+      if (!isAuthenticated) {
+        throw new UnauthorizedException('Token invalide ou expiré. Vérifiez que le token est correctement envoyé dans le header Authorization: Bearer <token>');
+      }
 
-    if (!requiredRoles) {
-      return true;
-    }
+      if (!requiredRoles) {
+        return true;
+      }
 
-    const request = context.switchToHttp().getRequest();
-    const user = request.user;
+      const request = context.switchToHttp().getRequest();
+      const user = request.user;
 
-    if (!user) {
-      throw new UnauthorizedException('Utilisateur non authentifié');
-    }
+      if (!user) {
+        throw new UnauthorizedException('Utilisateur non authentifié. Le token n\'a pas pu être validé.');
+      }
 
-    const hasRole = requiredRoles.some((role) => user.role === role);
-    
-    if (!hasRole) {
-      throw new ForbiddenException('Accès refusé : rôle insuffisant');
+      const hasRole = requiredRoles.some((role) => user.role === role);
+      
+      if (!hasRole) {
+        throw new ForbiddenException(`Accès refusé : rôle insuffisant. Rôle requis: ${requiredRoles.join(' ou ')}, Rôle actuel: ${user.role}`);
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedException || error instanceof ForbiddenException) {
+        throw error;
+      }
+      throw new UnauthorizedException(`Erreur d'authentification: ${error.message}`);
     }
 
     return true;

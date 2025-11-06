@@ -23,7 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload) {
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
-      throw new UnauthorizedException('Utilisateur non trouvé dans la base de données');
+      throw new UnauthorizedException(`Utilisateur non trouvé dans la base de données (ID: ${payload.sub}, Email: ${payload.email})`);
     }
     return { userId: payload.sub, email: payload.email, role: payload.role };
   }
