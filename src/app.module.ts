@@ -6,6 +6,8 @@ import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { SuiviEnfantModule } from './suivi-enfant/suivi-enfant.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { MessagesModule } from './messages/messages.module';
 
 
 @Module({
@@ -18,6 +20,8 @@ import { SuiviEnfantModule } from './suivi-enfant/suivi-enfant.module';
     UsersModule,
     AuthModule,
     SuiviEnfantModule,
+    UploadsModule,
+    MessagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

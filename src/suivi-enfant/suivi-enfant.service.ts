@@ -29,10 +29,7 @@ export class SuiviEnfantService {
     }
 
     const suivi = await this.suiviModel.create({
-      date_suivi: dto.date_suivi,
-      presence: dto.presence,
-      performance: dto.performance,
-      commentaire: dto.commentaire,
+      ...dto,
       enfant: new Types.ObjectId(dto.enfantId),
     });
     return suivi;

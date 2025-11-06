@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Get, Param, Patch, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { SuiviEnfantService } from './suivi-enfant.service';
 import { CreateSuiviEnfantDto } from './dto/create-suivi-enfant.dto';
 import { UpdateSuiviEnfantDto } from './dto/update-suivi-enfant.dto';
@@ -18,6 +18,26 @@ export class SuiviEnfantController {
   @ApiOperation({ summary: 'Créer un suivi pour un enfant (COACH uniquement)' })
   @ApiResponse({ status: 201, description: 'Suivi créé' })
   @ApiResponse({ status: 403, description: 'Accès refusé : rôle COACH requis' })
+  @ApiBody({
+    type: CreateSuiviEnfantDto,
+    examples: {
+      aCoachCreatingSuivi: {
+        summary: 'Example for a coach creating a new suivi',
+        value: {
+          date_suivi: '2023-11-06T14:30:00Z',
+          presence: true,
+          performance: 85,
+          commentaire: 'L\'enfant a montré une excellente participation et a bien compris les concepts.',
+          enfantId: '690c6ec9a632ce229c8c1421',
+          activityType: 'Entraînement',
+          focusAreas: ['Dribble', 'Passe'],
+          nextSessionGoals: ['Améliorer le tir'],
+          effortLevel: 8,
+          emotionalState: 'Motivé',
+        },
+      },
+    },
+  })
   create(@Body() dto: CreateSuiviEnfantDto) {
     return this.suiviEnfantService.create(dto);
   }
@@ -47,6 +67,7 @@ export class SuiviEnfantController {
   }
 
   @Patch(':id')
+  @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.COACH)
   @ApiOperation({ summary: 'Mettre à jour un suivi (COACH uniquement)' })
   @ApiResponse({ status: 200, description: 'Suivi mis à jour' })
@@ -56,6 +77,7 @@ export class SuiviEnfantController {
   }
 
   @Delete(':id')
+  @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.COACH)
   @ApiOperation({ summary: 'Supprimer un suivi (COACH uniquement)' })
   @ApiResponse({ status: 200, description: 'Suivi supprimé' })

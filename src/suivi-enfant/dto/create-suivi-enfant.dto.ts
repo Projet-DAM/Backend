@@ -1,4 +1,4 @@
-import { IsDateString, IsBoolean, IsNumber, IsString, IsOptional, IsMongoId } from 'class-validator';
+import { IsDateString, IsBoolean, IsNumber, IsString, IsOptional, IsMongoId, IsArray, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateSuiviEnfantDto {
@@ -19,4 +19,29 @@ export class CreateSuiviEnfantDto {
   @IsMongoId()
   @IsString()
   enfantId: string; // Correspond à l'ID du User avec rôle ENFANT
+
+  @IsOptional()
+  @IsString()
+  activityType?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  focusAreas?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  nextSessionGoals?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(10)
+  @Type(() => Number)
+  effortLevel?: number;
+
+  @IsOptional()
+  @IsString()
+  emotionalState?: string;
 }

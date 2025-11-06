@@ -17,6 +17,21 @@ export class SuiviEnfant {
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   enfant: Types.ObjectId;
+
+  @Prop({ type: String })
+  activityType?: string;
+
+  @Prop({ type: [String] })
+  focusAreas?: string[];
+
+  @Prop({ type: [String] })
+  nextSessionGoals?: string[];
+
+  @Prop({ type: Number, min: 1, max: 10 })
+  effortLevel?: number;
+
+  @Prop({ type: String })
+  emotionalState?: string;
 }
 
 export type SuiviEnfantDocument = SuiviEnfant & Document;
