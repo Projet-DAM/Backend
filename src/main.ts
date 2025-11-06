@@ -45,6 +45,7 @@ async function bootstrap() {
       },
       'JWT-auth',
     )
+    .addSecurityRequirements('JWT-auth')
     .addTag('Auth', 'Endpoints d\'authentification')
     .addTag('Users', 'Gestion des utilisateurs')
     .addTag('SuiviEnfant', 'Suivi des enfants')
