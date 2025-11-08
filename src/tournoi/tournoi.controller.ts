@@ -161,7 +161,7 @@ export class TournoiController {
     },
   })
   async create(
-    @Body() createTournoiDto: CreateTournoiDto,
+    @Body() createTournoiDto: any,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
