@@ -49,8 +49,7 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(UserRole.ACADEMIE)
-  @ApiOperation({ summary: 'Récupérer tous les utilisateurs (Académie uniquement)' })
+  @ApiOperation({ summary: 'Récupérer tous les utilisateurs' })
   @ApiQuery({ name: 'role', required: false, enum: UserRole, description: 'Filtrer par rôle' })
   @ApiResponse({ status: 200, description: 'Liste des utilisateurs' })
   findAll(@Query('role') role?: UserRole) {
