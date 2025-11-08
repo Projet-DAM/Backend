@@ -15,3 +15,4 @@ import { Activity, ActivitySchema } from './schemas/activity.schema';
 export class ActivitiesModule {}
 
 
+

@@ -28,10 +28,10 @@ export class ActivitiesService {
     }
 
     if (user.role === UserRole.COACH) {
-      (payload as any).coach = new Types.ObjectId(user.sub || user._id || user.id);
+      (payload as any).coach = new Types.ObjectId(user.userId || user.sub || user._id || user.id);
     }
     if (user.role === UserRole.ACADEMIE) {
-      (payload as any).academie = new Types.ObjectId(user.sub || user._id || user.id);
+      (payload as any).academie = new Types.ObjectId(user.userId || user.sub || user._id || user.id);
     }
 
     const created = await this.activityModel.create(payload);
@@ -138,8 +138,6 @@ export class ActivitiesService {
   }
 
   private assertOwnership(activity: ActivityDocument, user: any) {
-    const userId = String(user.sub || user._id || user.id);
-    
     // Les académies ont accès à toutes les activités
     if (user.role === UserRole.ACADEMIE) {
       return; // Autoriser sans vérification
@@ -147,7 +145,15 @@ export class ActivitiesService {
     
     // Les coachs n'ont accès qu'à leurs propres activités
     if (user.role === UserRole.COACH) {
-      if (!activity.coach || String(activity.coach) !== userId) {
+      if (!activity.coach) {
+        throw new ForbiddenException('Action non autorisée sur cette activité');
+      }
+      
+      const userId = user.userId || user.sub || user._id || user.id;
+      const userObjectId = new Types.ObjectId(userId);
+      const activityCoachId = new Types.ObjectId(activity.coach);
+      
+      if (!userObjectId.equals(activityCoachId)) {
         throw new ForbiddenException('Action non autorisée sur cette activité');
       }
     }
