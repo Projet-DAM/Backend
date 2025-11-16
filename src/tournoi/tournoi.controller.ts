@@ -12,6 +12,8 @@ import {
   UploadedFile,
   ParseFilePipe,
   MaxFileSizeValidator,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -25,6 +27,7 @@ import {
   ApiBadRequestResponse,
   ApiUnauthorizedResponse,
   ApiNotFoundResponse,
+  ApiForbiddenResponse,
 } from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -36,12 +39,17 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { UserRole } from '../users/interfaces/user-role.enum';
 import { ImageFileValidator } from '../users/validators/image-file.validator';
+import { InscriptionService } from '../inscriptions/inscription.service';
 
 @ApiTags('Tournois')
 @Controller('tournois')
 @ApiBearerAuth('JWT-auth')
 export class TournoiController {
-  constructor(private readonly tournoiService: TournoiService) {}
+  constructor(
+    private readonly tournoiService: TournoiService,
+    @Inject(forwardRef(() => InscriptionService))
+    private readonly inscriptionService: InscriptionService,
+  ) {}
 
   @Post()
   @Roles(UserRole.COACH, UserRole.ACADEMIE)
@@ -224,6 +232,76 @@ export class TournoiController {
   })
   findOne(@Param('id') id: string) {
     return this.tournoiService.findById(id);
+  }
+
+  @Get(':tournoiId/participants')
+  @Roles(UserRole.COACH, UserRole.ACADEMIE)
+  @ApiOperation({ summary: 'Récupérer tous les participants d\'un tournoi (Coach ou Académie uniquement)' })
+  @ApiParam({ name: 'tournoiId', description: 'ID du tournoi (MongoDB ObjectId)', example: '507f1f77bcf86cd799439012' })
+  @ApiResponse({
+    status: 200,
+    description: 'Liste des participants du tournoi',
+    schema: {
+      example: [
+        {
+          _id: '507f1f77bcf86cd799439011',
+          tournoiId: '507f1f77bcf86cd799439012',
+          enfantPrenom: 'Lucas',
+          enfantNom: 'Martin',
+          enfantDateNaissance: '2012-05-15T00:00:00.000Z',
+          parentPrenom: 'Sophie',
+          parentNom: 'Martin',
+          parentTelephone: '+33612345678',
+          montantInscription: 25.5,
+          besoinsParticuliers: 'Allergie aux arachides',
+          createdAt: '2024-01-15T10:00:00.000Z',
+          updatedAt: '2024-01-15T10:00:00.000Z',
+        },
+      ],
+    },
+  })
+  @ApiBadRequestResponse({
+    description: 'ID du tournoi invalide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'ID du tournoi invalide',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized',
+      },
+    },
+  })
+  @ApiForbiddenResponse({
+    description: 'Accès refusé : rôle insuffisant',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Tournoi non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Tournoi non trouvé',
+        error: 'Not Found',
+      },
+    },
+  })
+  getParticipants(@Param('tournoiId') tournoiId: string) {
+    return this.inscriptionService.findByTournoi(tournoiId);
   }
 
  @Patch(':id')
