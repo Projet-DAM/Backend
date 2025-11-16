@@ -12,7 +12,7 @@ export class TournoiService {
     @InjectModel(Tournoi.name) private tournoiModel: Model<TournoiDocument>,
   ) {}
 
-  async create(createTournoiDto: CreateTournoiDto & { imageUrl?: string }): Promise<TournoiDocument> {
+  async create(createTournoiDto: CreateTournoiDto & { image?: string }): Promise<TournoiDocument> {
     // Validation des dates
     const dateDebut = new Date(createTournoiDto.dateDebut);
     const dateFin = new Date(createTournoiDto.dateFin);
@@ -37,8 +37,8 @@ export class TournoiService {
       recompense: createTournoiDto.recompense,
     };
 
-    if (createTournoiDto.imageUrl) {
-      tournoiData.imageUrl = createTournoiDto.imageUrl;
+    if (createTournoiDto.image) {
+      tournoiData.image = createTournoiDto.image;
     }
 
     const tournoi = new this.tournoiModel(tournoiData);
@@ -53,7 +53,7 @@ export class TournoiService {
     return this.tournoiModel.findById(id).exec();
   }
 
-  async update(id: string, updateTournoiDto: UpdateTournoiDto): Promise<TournoiDocument> {
+  async update(id: string, updateTournoiDto: UpdateTournoiDto & { image?: string }): Promise<TournoiDocument> {
     const tournoi = await this.tournoiModel.findById(id);
     if (!tournoi) {
       throw new NotFoundException('Tournoi non trouvé');
@@ -85,6 +85,11 @@ export class TournoiService {
     
     if (updateTournoiDto.dateFin) {
       updateData.dateFin = dateFin;
+    }
+
+    // Gérer l'image si elle est fournie
+    if (updateTournoiDto.image) {
+      updateData.image = updateTournoiDto.image;
     }
 
     Object.assign(tournoi, updateData);

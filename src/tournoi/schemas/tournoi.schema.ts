@@ -37,7 +37,7 @@ export class Tournoi {
   fraisParticipation?: number;
 
   @Prop()
-  imageUrl?: string;
+  image?: string;
 
   @Prop({ enum: TournoiEtat, required: true, default: TournoiEtat.OUVERT })
   etat: TournoiEtat;

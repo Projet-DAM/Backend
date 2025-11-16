@@ -33,6 +33,7 @@ import { CreateTournoiDto } from './dto/create-tournoi.dto';
 import { UpdateTournoiDto } from './dto/update-tournoi.dto';
 import { TournoiResponseDto } from './dto/tournoi-response.dto';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { UserRole } from '../users/interfaces/user-role.enum';
 import { ImageFileValidator } from '../users/validators/image-file.validator';
 
@@ -174,35 +175,27 @@ export class TournoiController {
     file?: Express.Multer.File,
   ) {
     if (file) {
-      const imageUrl = `/uploads/tournois/${file.filename}`;
-      return this.tournoiService.create({ ...createTournoiDto, imageUrl });
+      const image = `/uploads/tournois/${file.filename}`;
+      return this.tournoiService.create({ ...createTournoiDto, image });
     }
     return this.tournoiService.create(createTournoiDto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Récupérer tous les tournois' })
+  @Public()
+  @ApiOperation({ summary: 'Récupérer tous les tournois (Public)' })
   @ApiResponse({
     status: 200,
     description: 'Liste des tournois',
     type: [TournoiResponseDto],
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized',
-      },
-    },
   })
   findAll() {
     return this.tournoiService.findAll();
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Récupérer un tournoi par ID' })
+  @Public()
+  @ApiOperation({ summary: 'Récupérer un tournoi par ID (Public)' })
   @ApiParam({ name: 'id', description: 'ID du tournoi (MongoDB ObjectId)' })
   @ApiResponse({
     status: 200,
@@ -216,16 +209,6 @@ export class TournoiController {
         statusCode: 400,
         message: 'ID invalide',
         error: 'Bad Request',
-      },
-    },
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized',
       },
     },
   })
@@ -243,49 +226,42 @@ export class TournoiController {
     return this.tournoiService.findById(id);
   }
 
-  @Patch(':id')
-  @Roles(UserRole.COACH, UserRole.ACADEMIE)
-  @ApiOperation({ summary: 'Mettre à jour un tournoi (Coach ou Académie uniquement)' })
-  @ApiParam({ name: 'id', description: 'ID du tournoi (MongoDB ObjectId)' })
-  @ApiBody({ type: UpdateTournoiDto })
-  @ApiResponse({
-    status: 200,
-    description: 'Tournoi mis à jour',
-    type: TournoiResponseDto,
-  })
-  @ApiBadRequestResponse({
-    description: 'Données invalides ou dates incorrectes',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: 'La date de début doit être antérieure à la date de fin',
-        error: 'Bad Request',
+ @Patch(':id')
+@Roles(UserRole.COACH, UserRole.ACADEMIE)
+@UseInterceptors(
+  FileInterceptor('image', {
+    storage: diskStorage({
+      destination: './uploads/tournois',
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, `tournoi-${uniqueSuffix}${extname(file.originalname)}`);
       },
-    },
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized',
-      },
-    },
-  })
-  @ApiNotFoundResponse({
-    description: 'Tournoi non trouvé',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Tournoi non trouvé',
-        error: 'Not Found',
-      },
-    },
-  })
-  update(@Param('id') id: string, @Body() updateTournoiDto: UpdateTournoiDto) {
-    return this.tournoiService.update(id, updateTournoiDto);
+    }),
+  }),
+)
+@ApiOperation({ summary: 'Mettre à jour un tournoi (Coach ou Académie uniquement)' })
+@ApiParam({ name: 'id', description: 'ID du tournoi (MongoDB ObjectId)' })
+@ApiConsumes('multipart/form-data')
+async update(
+  @Param('id') id: string,
+  @Body() updateTournoiDto: any, // ⚠️ CHANGER ICI : utiliser 'any' au lieu de 'UpdateTournoiDto'
+  @UploadedFile(
+    new ParseFilePipe({
+      validators: [
+        new MaxFileSizeValidator({ maxSize: 20000000 }), // 20MB
+        new ImageFileValidator(),
+      ],
+      fileIsRequired: false,
+    }),
+  )
+  file?: Express.Multer.File,
+) {
+  if (file) {
+    const imageUrl = `/uploads/tournois/${file.filename}`;
+    return this.tournoiService.update(id, { ...updateTournoiDto, image: imageUrl });
   }
+  return this.tournoiService.update(id, updateTournoiDto);
+}
 
   @Delete(':id')
   @Roles(UserRole.COACH, UserRole.ACADEMIE)

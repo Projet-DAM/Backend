@@ -50,7 +50,7 @@ export class TournoiResponseDto {
     description: 'URL de l\'affiche du tournoi',
     required: false,
   })
-  imageUrl?: string;
+  image?: string;
 
   @ApiProperty({
     example: 'ouvert',
