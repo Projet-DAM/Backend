@@ -8,6 +8,7 @@ import {
 import { AuthService } from './auth.service';
 import { LoginUserDto } from '../users/dto/login-user.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { Public } from '../common/decorators/public.decorator';
 
 @ApiTags('Auth')
@@ -22,22 +23,17 @@ export class AuthController {
   @ApiBody({ type: CreateUserDto })
   @ApiResponse({
     status: 201,
-    description: 'Utilisateur créé et authentifié avec succès',
+    description: 'Utilisateur créé avec succès. Un code de vérification a été envoyé par email.',
     schema: {
       example: {
-        access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        user: {
-          id: '507f1f77bcf86cd799439011',
-          email: 'jean.dupont@example.com',
-          nom: 'Dupont',
-          prenom: 'Jean',
-          role: 'parent',
-          photoProfil: null,
-        },
+        message: 'Inscription réussie. Un code de vérification a été envoyé à votre adresse email.',
+        userId: '507f1f77bcf86cd799439011',
+        email: 'jean.dupont@example.com',
       },
     },
   })
   @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
+  @ApiResponse({ status: 400, description: 'Rôle invalide (seuls parent et coach peuvent s\'inscrire)' })
   register(@Body() createUserDto: CreateUserDto) {
     return this.authService.register(createUserDto);
   }
@@ -67,6 +63,33 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Email ou mot de passe incorrect' })
   login(@Body() loginUserDto: LoginUserDto) {
     return this.authService.login(loginUserDto);
+  }
+
+  @Post('verify-email')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Vérifier l\'email avec le code de vérification' })
+  @ApiBody({ type: VerifyEmailDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Email vérifié avec succès',
+    schema: {
+      example: {
+        access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        user: {
+          id: '507f1f77bcf86cd799439011',
+          email: 'jean.dupont@example.com',
+          nom: 'Dupont',
+          prenom: 'Jean',
+          role: 'parent',
+          photoProfil: null,
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Code de vérification incorrect ou expiré' })
+  verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    return this.authService.verifyEmail(verifyEmailDto.userId, verifyEmailDto.code);
   }
 }
 

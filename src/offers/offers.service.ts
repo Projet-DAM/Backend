@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model } from 'mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
 import { Offer, OfferDocument } from './schemas/offer.schema';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
@@ -14,11 +14,13 @@ export class OffersService {
     @InjectModel(Subscription.name) private subModel: Model<SubscriptionDocument>,
   ) {}
 
-  async create(dto: CreateOfferDto, actor: { userId: string; role: UserRole }): Promise<OfferDocument> {
+  async create(dto: CreateOfferDto & { academyId?: string }, actor: { userId: string; role: UserRole }): Promise<OfferDocument> {
     if (![UserRole.ACADEMIE, UserRole.ADMIN].includes(actor.role)) {
       throw new ForbiddenException('Seules les académies ou un admin peuvent créer une offre');
     }
-    if (actor.role === UserRole.ACADEMIE && dto.academyId !== actor.userId) {
+    // academyId est ajouté par le controller depuis le token JWT
+    const academyId = dto.academyId || actor.userId;
+    if (actor.role === UserRole.ACADEMIE && academyId !== actor.userId) {
       throw new ForbiddenException('Une académie ne peut créer que ses propres offres');
     }
     if (dto.price <= 0) {
@@ -27,8 +29,16 @@ export class OffersService {
     if (dto.discountPct != null && (dto.discountPct < 0 || dto.discountPct > 100)) {
       throw new BadRequestException('discountPct doit être entre 0 et 100');
     }
-    const created = new this.offerModel(dto);
-    return created.save();
+    // Créer l'offre avec academyId inclus
+    const offerData = {
+      ...dto,
+      academyId: new Types.ObjectId(academyId), // S'assurer que c'est un ObjectId
+    };
+    console.log('Création d\'offre avec academyId:', academyId, 'ObjectId:', offerData.academyId);
+    const created = new this.offerModel(offerData);
+    const saved = await created.save();
+    console.log('Offre créée avec ID:', saved._id, 'academyId:', saved.academyId);
+    return saved;
   }
 
   async findAll(params: { isActive?: boolean; academyId?: string; page?: number; limit?: number; sort?: string; }): Promise<{ data: OfferDocument[]; total: number; page: number; limit: number; }>{
@@ -39,12 +49,38 @@ export class OffersService {
 
     const filter: FilterQuery<OfferDocument> = {};
     if (typeof isActive === 'boolean') filter.isActive = isActive;
-    if (academyId) filter.academyId = academyId as any;
+    if (academyId) {
+      // Convertir academyId (string) en ObjectId pour la requête MongoDB
+      // MongoDB peut stocker academyId comme ObjectId ou string, donc on essaie les deux
+      try {
+        const academyObjectId = new Types.ObjectId(academyId);
+        // Filtrer par ObjectId OU par string (pour compatibilité avec les anciennes offres)
+        filter.$or = [
+          { academyId: academyObjectId },
+          { academyId: academyId }
+        ];
+        console.log('Filtrage par academyId:', academyId, 'ObjectId:', academyObjectId);
+      } catch (error) {
+        // Si la conversion échoue, filtrer simplement par string
+        filter.academyId = academyId;
+        console.log('Filtrage par academyId (string):', academyId);
+      }
+    }
 
+    console.log('Filtre MongoDB:', JSON.stringify(filter, null, 2));
     const [data, total] = await Promise.all([
       this.offerModel.find(filter).sort(sort).skip((page - 1) * limit).limit(limit).exec(),
       this.offerModel.countDocuments(filter),
     ]);
+    console.log(`Offres trouvées: ${data.length} sur ${total} total`);
+    if (data.length > 0) {
+      console.log('Première offre trouvée:', {
+        _id: data[0]._id,
+        name: data[0].name,
+        academyId: data[0].academyId,
+        academyIdType: typeof data[0].academyId
+      });
+    }
     return { data, total, page, limit };
   }
 
@@ -75,8 +111,12 @@ export class OffersService {
 
   async remove(id: string, actor: { userId: string; role: UserRole }): Promise<void> {
     const offer = await this.findOne(id);
-    if (actor.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Seul un admin peut supprimer une offre');
+    if (![UserRole.ACADEMIE, UserRole.ADMIN].includes(actor.role)) {
+      throw new ForbiddenException('Seules les académies ou un admin peuvent supprimer une offre');
+    }
+    // Si c'est une académie, vérifier qu'elle ne supprime que ses propres offres
+    if (actor.role === UserRole.ACADEMIE && offer.academyId.toString() !== actor.userId) {
+      throw new ForbiddenException('Vous ne pouvez supprimer que vos propres offres');
     }
     const activeCount = await this.subModel.countDocuments({ offerId: offer._id, status: SubscriptionStatus.ACTIVE });
     if (activeCount > 0) {

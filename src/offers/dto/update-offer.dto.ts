@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/swagger';
 import { CreateOfferDto } from './create-offer.dto';
-import { IsEnum, IsMongoId, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, Max, Min } from 'class-validator';
 import { OfferType } from '../schemas/offer.schema';
 
 export class UpdateOfferDto extends PartialType(CreateOfferDto) {
@@ -24,9 +24,8 @@ export class UpdateOfferDto extends PartialType(CreateOfferDto) {
   @Max(100)
   override discountPct?: number;
 
-  @IsOptional()
-  @IsMongoId({ message: 'academyId doit être un ObjectId MongoDB valide (24 caractères hexadécimaux). Exemple: 690cd9998d614e72c9b1ab55' })
-  override academyId?: string;
+  // academyId ne doit PAS être dans le DTO
+  // Il ne peut pas être modifié via l'endpoint de mise à jour
 }
 
 

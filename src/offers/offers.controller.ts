@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards, ForbiddenException, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { OffersService } from './offers.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
@@ -19,14 +19,36 @@ export class OffersController {
   @Roles(UserRole.ACADEMIE, UserRole.ADMIN)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Créer une offre (ACADEMIE|ADMIN)' })
-  @ApiBody({ schema: { example: { name: 'Mensuel', description: 'Accès mensuel', type: 'MONTHLY', durationDays: 30, price: 50, discountPct: 0, conditions: 'Non remboursable', academyId: '65b1f0...academy' } } })
+  @ApiBody({ schema: { example: { name: 'Mensuel', description: 'Accès mensuel', type: 'MONTHLY', durationDays: 30, price: 50, discountPct: 0, conditions: 'Non remboursable' } } })
+  @UsePipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: false, // Désactiver pour cette route spécifique
+    transform: true,
+  }))
   create(@Body() dto: CreateOfferDto, @Req() req: any) {
-    return this.offersService.create(dto, { userId: req.user.userId, role: req.user.role });
+    // Log pour debug
+    console.log('Received DTO:', JSON.stringify(dto, null, 2));
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    
+    // Extraire l'academyId depuis le token JWT
+    const currentUserId = req.user?.userId || req.user?.sub;
+    if (!currentUserId) {
+      throw new ForbiddenException('Utilisateur non authentifié');
+    }
+    
+    // Ajouter automatiquement l'academyId au DTO
+    const dtoWithAcademyId = {
+      ...dto,
+      academyId: currentUserId.toString(),
+    };
+    
+    return this.offersService.create(dtoWithAcademyId, { userId: currentUserId, role: req.user.role });
   }
 
   @Get()
-  @Public()
-  @ApiOperation({ summary: 'Lister les offres (public)' })
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Lister les offres' })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
   @ApiQuery({ name: 'academyId', required: false, type: String })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -38,9 +60,31 @@ export class OffersController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('sort') sort?: string,
+    @Req() req?: any,
   ) {
+    const currentUserRole = req?.user?.role;
+    const currentUserId = req?.user?.userId || req?.user?.sub;
+    
+    console.log('findAll - currentUserRole:', currentUserRole);
+    console.log('findAll - currentUserId:', currentUserId);
+    console.log('findAll - academyId query param:', academyId);
+    
+    // Si l'utilisateur est une académie, filtrer automatiquement par son academyId
+    if (currentUserRole === UserRole.ACADEMIE && currentUserId && !academyId) {
+      academyId = currentUserId.toString();
+      console.log('findAll - academyId auto-assigné:', academyId);
+    }
+    
+    // Pour les parents, filtrer uniquement les offres actives
+    let isActiveFilter: boolean | undefined;
+    if (currentUserRole === UserRole.PARENT) {
+      isActiveFilter = true; // Les parents voient uniquement les offres actives
+    } else {
+      isActiveFilter = typeof isActive === 'string' ? isActive === 'true' : undefined;
+    }
+    
     const parsed: any = {
-      isActive: typeof isActive === 'string' ? isActive === 'true' : undefined,
+      isActive: isActiveFilter,
       academyId,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
@@ -68,11 +112,12 @@ export class OffersController {
   @Delete(':id')
   @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ACADEMIE, UserRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Supprimer une offre (ADMIN)' })
+  @ApiOperation({ summary: 'Supprimer une offre (ACADEMIE|ADMIN)' })
   async remove(@Param('id') id: string, @Req() req: any) {
-    await this.offersService.remove(id, { userId: req.user.userId, role: req.user.role });
+    const currentUserId = req.user?.userId || req.user?.sub;
+    await this.offersService.remove(id, { userId: currentUserId, role: req.user.role });
     return;
   }
 }

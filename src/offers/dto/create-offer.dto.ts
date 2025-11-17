@@ -44,12 +44,8 @@ export class CreateOfferDto {
   @IsOptional()
   isActive?: boolean = true;
 
-  @ApiProperty({ 
-    example: '690cd9998d614e72c9b1ab55',
-    description: 'ID de l\'académie (ObjectId MongoDB - 24 caractères hexadécimaux)'
-  })
-  @IsMongoId({ message: 'academyId doit être un ObjectId MongoDB valide (24 caractères hexadécimaux). Exemple: 690cd9998d614e72c9b1ab55' })
-  academyId: string;
+  // academyId ne doit PAS être dans le DTO
+  // Il sera ajouté automatiquement par le controller depuis le token JWT
 }
 
 

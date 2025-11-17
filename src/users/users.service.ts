@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './entity/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -14,14 +14,17 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
-    // Vérifier si l'email existe déjà
-    const existingUser = await this.userModel.findOne({ email: createUserDto.email });
-    if (existingUser) {
-      throw new ConflictException('Cet email est déjà utilisé');
+    // Vérifier si l'email existe déjà (sauf pour les enfants avec email temporaire)
+    if (createUserDto.email && !createUserDto.email.includes('@temp.com')) {
+      const existingUser = await this.userModel.findOne({ email: createUserDto.email });
+      if (existingUser) {
+        throw new ConflictException('Cet email est déjà utilisé');
+      }
     }
 
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(createUserDto.motDePasse, 10);
+    // Hasher le mot de passe (ou générer un mot de passe temporaire pour les enfants)
+    const passwordToHash = createUserDto.motDePasse || 'temp123';
+    const hashedPassword = await bcrypt.hash(passwordToHash, 10);
 
     // Validation logique selon le rôle
     const userData: any = {
@@ -45,6 +48,20 @@ export class UsersService {
       delete userData.adresse;
       delete userData.description;
       delete userData.horaires;
+      
+      // Gérer le parentId si fourni
+      if (createUserDto.parentId) {
+        const parent = await this.userModel.findById(createUserDto.parentId);
+        if (!parent) {
+          throw new NotFoundException('Parent non trouvé');
+        }
+        if (parent.role !== UserRole.PARENT) {
+          throw new BadRequestException('L\'utilisateur spécifié comme parent doit avoir le rôle parent');
+        }
+        // Convertir parentId (string) en ObjectId
+        userData.parent = new Types.ObjectId(createUserDto.parentId);
+        delete userData.parentId; // Supprimer parentId car on utilise parent (ObjectId)
+      }
     } else if (createUserDto.role === UserRole.PARENT) {
       // Un parent peut avoir des enfants, mais ne peut pas avoir d'attribut parent
       delete userData.parent;
@@ -83,12 +100,55 @@ export class UsersService {
     }
 
     const user = new this.userModel(userData);
-    return user.save();
+    const savedUser = await user.save();
+
+    // Si c'est un enfant avec un parent, ajouter l'enfant à la liste des enfants du parent
+    if (createUserDto.role === UserRole.ENFANT && savedUser.parent) {
+      const parent = await this.userModel.findById(savedUser.parent);
+      if (parent) {
+        if (!parent.enfants) {
+          parent.enfants = [];
+        }
+        if (!parent.enfants.some((id: any) => id.toString() === savedUser._id.toString())) {
+          parent.enfants.push(savedUser._id);
+          await parent.save();
+        }
+      }
+    }
+
+    return savedUser;
   }
 
-  async findAll(role?: UserRole): Promise<UserDocument[]> {
-    const query = role ? { role } : {};
-    return this.userModel.find(query).populate('enfants').populate('parent').exec();
+  async findAll(filters?: { role?: UserRole; parentId?: string }): Promise<UserDocument[]> {
+    const query: any = {};
+    
+    if (filters?.role) {
+      query.role = filters.role;
+    }
+    
+    if (filters?.parentId) {
+      // Convertir parentId (string) en ObjectId pour la requête MongoDB
+      try {
+        query.parent = new Types.ObjectId(filters.parentId);
+        console.log(`[UsersService] findAll - Filtrage par parentId: ${filters.parentId} (ObjectId: ${query.parent})`);
+      } catch (error) {
+        console.error(`[UsersService] Erreur lors de la conversion du parentId en ObjectId: ${error}`);
+        throw new BadRequestException(`ID parent invalide: ${filters.parentId}`);
+      }
+    }
+    
+    console.log(`[UsersService] findAll - Query:`, JSON.stringify(query));
+    const users = await this.userModel.find(query).populate('enfants').populate('parent').exec();
+    console.log(`[UsersService] findAll - Résultat: ${users.length} utilisateur(s) trouvé(s)`);
+    if (filters?.role === UserRole.ENFANT && users.length > 0) {
+      console.log(`[UsersService] Détails des enfants:`, users.map(u => ({ 
+        id: u._id?.toString(), 
+        nom: u.nom, 
+        prenom: u.prenom, 
+        parent: u.parent?.toString() || u.parent 
+      })));
+    }
+    return users;
   }
 
   async findById(id: string): Promise<UserDocument | null> {
@@ -226,10 +286,23 @@ export class UsersService {
   }
 
   async remove(id: string): Promise<void> {
-    const result = await this.userModel.findByIdAndDelete(id);
-    if (!result) {
+    const user = await this.userModel.findById(id);
+    if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
+
+    // Si c'est un enfant, le retirer de la liste des enfants du parent
+    if (user.role === UserRole.ENFANT && user.parent) {
+      const parent = await this.userModel.findById(user.parent);
+      if (parent && parent.enfants) {
+        parent.enfants = parent.enfants.filter(
+          (childId: any) => childId.toString() !== id
+        );
+        await parent.save();
+      }
+    }
+
+    await this.userModel.findByIdAndDelete(id);
   }
 
   async linkChild(parentId: string, childId: string): Promise<UserDocument> {
@@ -299,6 +372,21 @@ export class UsersService {
     // Récupérer les enfants complets depuis la base de données
     const children = await this.userModel.find({ _id: { $in: childrenIds } }).exec();
     return children;
+  }
+
+  async updateVerificationCode(userId: string, code: string, expiresAt: Date): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      verificationCode: code,
+      verificationCodeExpires: expiresAt,
+    });
+  }
+
+  async markEmailAsVerified(userId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      emailVerified: true,
+      verificationCode: undefined,
+      verificationCodeExpires: undefined,
+    });
   }
 }
 

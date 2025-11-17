@@ -25,7 +25,7 @@ export class SubscriptionsController {
     return this.service.create(dto, { userId: req.user.userId, role: req.user.role });
   }
 
-  @Get('mine')
+  @Get('my')
   @Roles(UserRole.PARENT)
   @ApiOperation({ summary: 'Lister mes abonnements (PARENT)' })
   mine(@Req() req: any) {

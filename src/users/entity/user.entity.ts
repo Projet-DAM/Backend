@@ -46,6 +46,9 @@ export class User {
   @Prop()
   dateNaissance?: Date;
 
+  @Prop({ enum: ['M', 'F'] })
+  sexe?: string;
+
   // Attributs spécifiques à l'Académie
   @Prop()
   nomAcademie?: string;
@@ -63,6 +66,16 @@ export class User {
       fin: string;
     };
   };
+
+  // Champs pour la vérification d'email
+  @Prop()
+  verificationCode?: string;
+
+  @Prop({ type: Date })
+  verificationCodeExpires?: Date;
+
+  @Prop({ default: false })
+  emailVerified?: boolean;
 
   createdAt?: Date;
   updatedAt?: Date;
