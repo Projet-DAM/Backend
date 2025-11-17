@@ -36,6 +36,12 @@ export class QueryActivityDto {
   @IsMongoId()
   academie?: string;
 
+  @ApiPropertyOptional({ description: 'Filtrer par programme (ObjectId)' })
+  @Transform(transformEmptyToUndefined)
+  @IsOptional()
+  @IsMongoId()
+  programme?: string;
+
   @ApiPropertyOptional({ description: 'Filtrer par statut', enum: ActivityStatus })
   @Transform(transformEmptyToUndefined)
   @IsOptional()

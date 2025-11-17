@@ -46,6 +46,7 @@ export class ActivitiesController {
   @ApiQuery({ name: 'date', required: false, description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'coach', required: false })
   @ApiQuery({ name: 'academie', required: false })
+  @ApiQuery({ name: 'programme', required: false })
   @ApiQuery({ name: 'statut', required: false })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -83,6 +84,8 @@ export class ActivitiesController {
     return this.activitiesService.remove(id, req.user);
   }
 }
+
+
 
 
 

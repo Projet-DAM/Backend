@@ -6,11 +6,13 @@ import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivityDto } from './dto/query-activity.dto';
 import { UserRole } from '../users/interfaces/user-role.enum';
+import { Program, ProgramDocument } from '../programs/schemas/program.schema';
 
 @Injectable()
 export class ActivitiesService {
   constructor(
     @InjectModel(Activity.name) private readonly activityModel: Model<ActivityDocument>,
+    @InjectModel(Program.name) private readonly programModel: Model<ProgramDocument>,
   ) {}
 
   async create(dto: CreateActivityDto, user: any): Promise<Activity> {
@@ -44,6 +46,7 @@ export class ActivitiesService {
       date,
       coach,
       academie,
+      programme,
       statut,
       page = 1,
       limit = 10,
@@ -64,6 +67,7 @@ export class ActivitiesService {
     }
     if (coach) filter.coach = new Types.ObjectId(coach);
     if (academie) filter.academie = new Types.ObjectId(academie);
+    if (programme) filter.programme = new Types.ObjectId(programme);
     if (statut) filter.statut = statut as ActivityStatus;
 
     const sort: Record<string, 1 | -1> = { [sortBy]: order === 'desc' ? -1 : 1 };
@@ -134,6 +138,12 @@ export class ActivitiesService {
     this.assertOwnership(activity, user);
 
     await this.activityModel.findByIdAndDelete(id).exec();
+    await this.programModel
+      .updateMany(
+        { activites: activity._id },
+        { $pull: { activites: activity._id } },
+      )
+      .exec();
     return { deleted: true };
   }
 

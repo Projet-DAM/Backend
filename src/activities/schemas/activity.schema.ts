@@ -47,6 +47,9 @@ export class Activity {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   academie?: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'Program' })
+  programme?: Types.ObjectId;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -55,6 +58,9 @@ export const ActivitySchema = SchemaFactory.createForClass(Activity);
 
 ActivitySchema.index({ date: 1 });
 ActivitySchema.index({ categorie: 1 });
+ActivitySchema.index({ programme: 1 });
+
+
 
 
 

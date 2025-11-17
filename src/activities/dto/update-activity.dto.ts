@@ -18,3 +18,5 @@ export class UpdateActivityDto extends PartialType(CreateActivityDto) {
 
 
 
+
+
