@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, ValidationPipe } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { ProgramsService } from './programs.service';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
@@ -7,6 +8,9 @@ import { QueryProgramDto } from './dto/query-program.dto';
 import { ManageProgramActivitiesDto } from './dto/manage-program-activities.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../users/interfaces/user-role.enum';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { ImageFileValidator } from '../users/validators/image-file.validator';
 
 @ApiTags('Programs')
 @ApiBearerAuth('JWT-auth')
@@ -16,10 +20,75 @@ export class ProgramsController {
 
   @Post()
   @Roles(UserRole.ACADEMIE, UserRole.COACH)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `program-${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
   @ApiOperation({ summary: 'Créer un programme' })
+  @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Programme créé' })
-  @ApiBody({ type: CreateProgramDto })
-  create(@Body() dto: CreateProgramDto, @Req() req: any) {
+  @ApiBody({
+    description: 'Corps de la requête pour créer un programme',
+    schema: {
+      type: 'object',
+      properties: {
+        nom_programme: { type: 'string', example: 'Pré-saison U13' },
+        description: { type: 'string', example: 'Programme de préparation' },
+        objectif: { type: 'string', example: 'Améliorer la condition physique' },
+        niveau: { type: 'string', example: 'Intermédiaire' },
+        prix: { type: 'number', example: 99 },
+        statut: { type: 'string', enum: ['BROUILLON', 'ACTIF', 'ARCHIVE'], example: 'BROUILLON' },
+        activites: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
+        },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image du programme',
+        },
+      },
+      required: ['nom_programme'],
+    },
+  })
+  create(
+    @Body(new ValidationPipe({ transform: true, transformOptions: { enableImplicitConversion: true } })) dto: CreateProgramDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 20000000 }), // 20MB
+          new ImageFileValidator(),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file: Express.Multer.File | undefined,
+    @Req() req: any,
+  ) {
+    if (file) {
+      dto.image = `/uploads/${file.filename}`;
+    }
+    // Convertir les strings en nombres pour multipart/form-data
+    if (dto.prix !== undefined) {
+      if (typeof dto.prix === 'string') {
+        dto.prix = dto.prix === '' ? undefined : Number(dto.prix);
+      }
+    }
+    // Convertir activites si c'est une string séparée par des virgules
+    if (dto.activites !== undefined) {
+      const activitesValue = dto.activites as any;
+      if (typeof activitesValue === 'string') {
+        dto.activites = activitesValue.split(',').map((item: string) => item.trim()).filter((item: string) => item.length > 0);
+      }
+    }
     return this.programsService.create(dto, req.user);
   }
 
@@ -72,4 +141,5 @@ export class ProgramsController {
     return this.programsService.remove(id, req.user);
   }
 }
+
 

@@ -40,6 +40,9 @@ export class Program {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   academie?: Types.ObjectId;
 
+  @Prop()
+  image?: string;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -48,4 +51,5 @@ export const ProgramSchema = SchemaFactory.createForClass(Program);
 
 ProgramSchema.index({ nom_programme: 1, coach: 1 });
 ProgramSchema.index({ nom_programme: 1, academie: 1 });
+
 

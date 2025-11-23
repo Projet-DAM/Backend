@@ -1,11 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, ValidationPipe } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { ActivitiesService } from './activities.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivityDto } from './dto/query-activity.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../users/interfaces/user-role.enum';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { ImageFileValidator } from '../users/validators/image-file.validator';
 
 @ApiTags('Activities')
 @ApiBearerAuth('JWT-auth')
@@ -15,28 +19,70 @@ export class ActivitiesController {
 
   @Post()
   @Roles(UserRole.ACADEMIE, UserRole.COACH)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `activity-${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
   @ApiOperation({ summary: 'Créer une activité' })
+  @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Activité créée' })
   @ApiBody({
     description: 'Corps de la requête pour créer une activité',
-    examples: {
-      example1: {
-        summary: 'Séance de football',
-        value: {
-          nom_activite: 'Football U10',
-          description: "Entraînement hebdomadaire",
-          categorie: 'Football',
-          date: '2025-11-15',
-          heure: '14:30',
-          duree: 90,
-          capacite_max: 20,
-          prix: 10,
-          statut: 'ACTIVE',
-        } as CreateActivityDto,
+    schema: {
+      type: 'object',
+      properties: {
+        nom_activite: { type: 'string', example: 'Football U10' },
+        description: { type: 'string', example: 'Entraînement hebdomadaire' },
+        categorie: { type: 'string', example: 'Football' },
+        date: { type: 'string', format: 'date', example: '2025-11-15' },
+        heure: { type: 'string', example: '14:30' },
+        duree: { type: 'number', example: 90 },
+        capacite_max: { type: 'number', example: 20 },
+        prix: { type: 'number', example: 10 },
+        statut: { type: 'string', enum: ['ACTIVE', 'ANNULEE', 'TERMINEE', 'BROUILLON'], example: 'ACTIVE' },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image de l\'activité',
+        },
       },
+      required: ['nom_activite'],
     },
   })
-  create(@Body() dto: CreateActivityDto, @Req() req: any) {
+  create(
+    @Body(new ValidationPipe({ transform: true, transformOptions: { enableImplicitConversion: true } })) dto: CreateActivityDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 20000000 }), // 20MB
+          new ImageFileValidator(),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file: Express.Multer.File | undefined,
+    @Req() req: any,
+  ) {
+    if (file) {
+      dto.image = `/uploads/${file.filename}`;
+    }
+    // Convertir les strings en nombres pour multipart/form-data
+    if (dto.duree !== undefined && typeof dto.duree === 'string') {
+      dto.duree = dto.duree === '' ? undefined : Number(dto.duree);
+    }
+    if (dto.capacite_max !== undefined && typeof dto.capacite_max === 'string') {
+      dto.capacite_max = dto.capacite_max === '' ? undefined : Number(dto.capacite_max);
+    }
+    if (dto.prix !== undefined && typeof dto.prix === 'string') {
+      dto.prix = dto.prix === '' ? undefined : Number(dto.prix);
+    }
     return this.activitiesService.create(dto, req.user);
   }
 

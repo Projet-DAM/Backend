@@ -50,6 +50,9 @@ export class Activity {
   @Prop({ type: Types.ObjectId, ref: 'Program' })
   programme?: Types.ObjectId;
 
+  @Prop()
+  image?: string;
+
   createdAt?: Date;
   updatedAt?: Date;
 }

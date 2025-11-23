@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsDateString, IsEnum, IsMongoId, IsNumber, IsOptional, IsPositive, IsString, Length, Matches, Min } from 'class-validator';
 import { ActivityStatus } from '../schemas/activity.schema';
 
@@ -37,18 +37,39 @@ export class CreateActivityDto {
 
   @ApiProperty({ description: 'Durée en minutes', required: false, example: 90 })
   @IsOptional()
+  @Type(() => Number)
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'number') return value;
+    const num = Number(value);
+    return isNaN(num) ? undefined : num;
+  })
   @IsNumber()
   @IsPositive()
   duree?: number;
 
   @ApiProperty({ description: 'Capacité maximale', required: false, example: 20 })
   @IsOptional()
+  @Type(() => Number)
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'number') return value;
+    const num = Number(value);
+    return isNaN(num) ? undefined : num;
+  })
   @IsNumber()
   @Min(1)
   capacite_max?: number;
 
   @ApiProperty({ description: 'Prix', required: false, example: 15 })
   @IsOptional()
+  @Type(() => Number)
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'number') return value;
+    const num = Number(value);
+    return isNaN(num) ? undefined : num;
+  })
   @IsNumber()
   @Min(0)
   prix?: number;
@@ -67,6 +88,11 @@ export class CreateActivityDto {
   @IsOptional()
   @IsMongoId()
   academie?: string;
+
+  @ApiProperty({ description: 'Chemin de l\'image (généré automatiquement lors de l\'upload)', required: false })
+  @IsOptional()
+  @IsString()
+  image?: string;
 }
 
 
