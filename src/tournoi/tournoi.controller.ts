@@ -235,7 +235,7 @@ export class TournoiController {
   }
 
   @Get(':tournoiId/participants')
-  @Roles(UserRole.COACH, UserRole.ACADEMIE)
+  @Roles(UserRole.COACH, UserRole.ACADEMIE, UserRole.PARENT)
   @ApiOperation({ summary: 'Récupérer tous les participants d\'un tournoi (Coach ou Académie uniquement)' })
   @ApiParam({ name: 'tournoiId', description: 'ID du tournoi (MongoDB ObjectId)', example: '507f1f77bcf86cd799439012' })
   @ApiResponse({
