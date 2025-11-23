@@ -33,11 +33,12 @@ export class CreateProgramDto {
   @Transform(({ value }) => {
     if (value === '' || value === null || value === undefined) return undefined;
     if (typeof value === 'number') return value;
+    if (typeof value === 'string' && value.trim() === '') return undefined;
     const num = Number(value);
     return isNaN(num) ? undefined : num;
   })
-  @IsNumber()
-  @Min(0)
+  @IsNumber({}, { message: 'Le prix doit être un nombre valide' })
+  @Min(0, { message: 'Le prix doit être supérieur ou égal à 0' })
   prix?: number;
 
   @ApiPropertyOptional({ description: 'Statut du programme', enum: ProgramStatus, default: ProgramStatus.BROUILLON })
@@ -52,16 +53,21 @@ export class CreateProgramDto {
   })
   @IsOptional()
   @Transform(({ value }) => {
-    if (!value) return undefined;
-    if (Array.isArray(value)) return value;
+    if (!value || value === null || value === undefined) return undefined;
+    if (value === '') return undefined;
+    if (Array.isArray(value)) {
+      // Filtrer les valeurs vides
+      return value.filter(item => item && item.trim().length > 0);
+    }
     if (typeof value === 'string') {
       // Si c'est une string séparée par des virgules, la convertir en tableau
-      return value.split(',').map(item => item.trim()).filter(item => item.length > 0);
+      const items = value.split(',').map(item => item.trim()).filter(item => item.length > 0);
+      return items.length > 0 ? items : undefined;
     }
-    return value;
+    return undefined;
   })
-  @IsArray()
-  @IsMongoId({ each: true })
+  @IsArray({ message: 'Les activités doivent être un tableau' })
+  @IsMongoId({ each: true, message: 'Chaque activité doit être un identifiant MongoDB valide' })
   activites?: string[];
 
   @ApiPropertyOptional({ description: 'Chemin de l\'image (généré automatiquement lors de l\'upload)' })

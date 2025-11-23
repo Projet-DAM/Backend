@@ -11,6 +11,18 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
+  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+    // Si une erreur est passée, la propager
+    if (err) {
+      throw err;
+    }
+    // Si l'utilisateur n'est pas trouvé, lancer une exception
+    if (!user) {
+      throw new UnauthorizedException(info?.message || 'Token invalide ou expiré');
+    }
+    return user;
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -26,10 +38,19 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getClass(),
     ]);
 
-    const isAuthenticated = await super.canActivate(context) as boolean;
-    
-    if (!isAuthenticated) {
-      throw new UnauthorizedException('Token invalide ou expiré');
+    try {
+      const isAuthenticated = await super.canActivate(context) as boolean;
+      
+      if (!isAuthenticated) {
+        throw new UnauthorizedException('Token invalide ou expiré');
+      }
+    } catch (error) {
+      // Si l'erreur est déjà une UnauthorizedException, la propager telle quelle
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      // Sinon, convertir en UnauthorizedException avec un message approprié
+      throw new UnauthorizedException(error?.message || 'Token invalide ou expiré');
     }
 
     if (!requiredRoles) {

@@ -33,8 +33,14 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
-  app.enableCors();
+  // CORS - Configuration pour permettre les requêtes depuis Swift
+  app.enableCors({
+    origin: true, // Permet toutes les origines (à restreindre en production)
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+    exposedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   // Configuration Swagger
   const config = new DocumentBuilder()

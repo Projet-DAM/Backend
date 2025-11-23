@@ -51,5 +51,3 @@ export const ProgramSchema = SchemaFactory.createForClass(Program);
 
 ProgramSchema.index({ nom_programme: 1, coach: 1 });
 ProgramSchema.index({ nom_programme: 1, academie: 1 });
-
-

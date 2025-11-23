@@ -60,7 +60,15 @@ export class ProgramsController {
     },
   })
   create(
-    @Body(new ValidationPipe({ transform: true, transformOptions: { enableImplicitConversion: true } })) dto: CreateProgramDto,
+    @Body(new ValidationPipe({ 
+      transform: true, 
+      transformOptions: { enableImplicitConversion: true },
+      skipMissingProperties: false,
+      skipNullProperties: false,
+      skipUndefinedProperties: false,
+      whitelist: true,
+      forbidNonWhitelisted: false, // Plus permissif pour multipart/form-data
+    })) dto: CreateProgramDto,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
@@ -73,22 +81,39 @@ export class ProgramsController {
     file: Express.Multer.File | undefined,
     @Req() req: any,
   ) {
+    // Gérer l'image si un fichier est uploadé
     if (file) {
       dto.image = `/uploads/${file.filename}`;
     }
+    
     // Convertir les strings en nombres pour multipart/form-data
-    if (dto.prix !== undefined) {
+    if (dto.prix !== undefined && dto.prix !== null) {
       if (typeof dto.prix === 'string') {
         dto.prix = dto.prix === '' ? undefined : Number(dto.prix);
+        // Si la conversion échoue, définir à undefined
+        if (isNaN(dto.prix as number)) {
+          dto.prix = undefined;
+        }
       }
     }
-    // Convertir activites si c'est une string séparée par des virgules
-    if (dto.activites !== undefined) {
+    
+    // Convertir activites si c'est une string séparée par des virgules ou un array
+    if (dto.activites !== undefined && dto.activites !== null) {
       const activitesValue = dto.activites as any;
       if (typeof activitesValue === 'string') {
-        dto.activites = activitesValue.split(',').map((item: string) => item.trim()).filter((item: string) => item.length > 0);
+        // Si c'est une string vide, définir à undefined
+        if (activitesValue.trim() === '') {
+          dto.activites = undefined;
+        } else {
+          // Sinon, convertir en array
+          dto.activites = activitesValue.split(',').map((item: string) => item.trim()).filter((item: string) => item.length > 0);
+        }
+      } else if (!Array.isArray(activitesValue)) {
+        // Si ce n'est ni une string ni un array, définir à undefined
+        dto.activites = undefined;
       }
     }
+    
     return this.programsService.create(dto, req.user);
   }
 
@@ -141,5 +166,6 @@ export class ProgramsController {
     return this.programsService.remove(id, req.user);
   }
 }
+
 
 
