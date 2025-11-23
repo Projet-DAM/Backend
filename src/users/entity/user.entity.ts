@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { UserRole } from '../interfaces/user-role.enum';
+import { SportType } from '../interfaces/sport-type.enum';
 
 export type UserDocument = User & Document;
 
@@ -45,6 +46,9 @@ export class User {
   // Attributs spécifiques à l'Enfant
   @Prop()
   dateNaissance?: Date;
+
+  @Prop({ enum: SportType })
+  sportPratique?: SportType;
 
   // Attributs spécifiques à l'Académie
   @Prop()

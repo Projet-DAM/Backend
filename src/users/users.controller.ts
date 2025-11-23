@@ -32,6 +32,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { LinkChildDto } from './dto/link-child.dto';
+import { CreateChildDto } from './dto/create-child.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from './interfaces/user-role.enum';
@@ -328,6 +329,60 @@ export class UsersController {
     return this.usersService.linkChild(id, linkChildDto.childId);
   }
 
+  @Get(':parentId/children/:childId')
+  @Roles(UserRole.PARENT)
+  @ApiOperation({ summary: 'Récupérer un enfant spécifique avec vérification d\'appartenance' })
+  @ApiParam({ name: 'parentId', description: 'ID du parent (MongoDB ObjectId)' })
+  @ApiParam({ name: 'childId', description: 'ID de l\'enfant (MongoDB ObjectId)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Enfant trouvé',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'ID invalide ou enfant n\'appartient pas au parent',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Cet enfant n\'appartient pas à ce parent',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Parent requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Parent ou enfant non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Parent ou enfant non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  getChildData(@Param('parentId') parentId: string, @Param('childId') childId: string) {
+    return this.usersService.getChildData(parentId, childId);
+  }
+
   @Get(':id/children')
   @Roles(UserRole.PARENT)
   @ApiOperation({ summary: 'Récupérer les enfants d\'un parent' })
@@ -379,6 +434,60 @@ export class UsersController {
   })
   getChildren(@Param('id') id: string) {
     return this.usersService.getChildren(id);
+  }
+
+  @Post(':id/children')
+  @Roles(UserRole.PARENT)
+  @ApiOperation({ summary: 'Créer un nouvel enfant pour un parent' })
+  @ApiParam({ name: 'id', description: 'ID du parent (MongoDB ObjectId)' })
+  @ApiBody({ type: CreateChildDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Enfant créé avec succès',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'Erreur de validation ou ID invalide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['prenom must be a string', 'sportPratique must be a valid enum value'],
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Parent requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Parent non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Parent non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  createChild(@Param('id') id: string, @Body() createChildDto: CreateChildDto) {
+    return this.usersService.createChild(id, createChildDto);
   }
 
   @Post(':id/upload-photo')

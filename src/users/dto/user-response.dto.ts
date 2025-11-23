@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../interfaces/user-role.enum';
+import { SportType } from '../interfaces/sport-type.enum';
 
 export class UserResponseDto {
   @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'ID unique de l\'utilisateur' })
@@ -75,6 +76,15 @@ export class UserResponseDto {
   dateNaissance?: Date;
 
   @ApiProperty({ 
+    example: 'football', 
+    description: 'Sport pratiqué (pour les enfants)',
+    enum: SportType,
+    enumName: 'SportType',
+    required: false
+  })
+  sportPratique?: SportType;
+
+  @ApiProperty({ 
     example: 'Académie de Football Excellence', 
     description: 'Nom de l\'académie (pour les académies)',
     required: false
@@ -117,6 +127,7 @@ export class UserResponseDto {
   @ApiProperty({ example: '2024-01-01T00:00:00.000Z', description: 'Date de mise à jour' })
   updatedAt?: Date;
 }
+
 
 
 
