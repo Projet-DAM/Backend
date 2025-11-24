@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { TournoiModule } from './tournoi/tournoi.module';
 import { InscriptionModule } from './inscriptions/inscription.module';
+import { EquipeModule } from './equipes/equipe.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { InscriptionModule } from './inscriptions/inscription.module';
     AuthModule,
     TournoiModule,
     InscriptionModule,
+    EquipeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

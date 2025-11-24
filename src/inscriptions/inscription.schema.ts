@@ -41,3 +41,4 @@ export class Inscription {
 export const InscriptionSchema = SchemaFactory.createForClass(Inscription);
 
 
+

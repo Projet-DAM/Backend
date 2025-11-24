@@ -40,6 +40,8 @@ import { Public } from '../common/decorators/public.decorator';
 import { UserRole } from '../users/interfaces/user-role.enum';
 import { ImageFileValidator } from '../users/validators/image-file.validator';
 import { InscriptionService } from '../inscriptions/inscription.service';
+import { EquipeService } from '../equipes/equipe.service';
+import { ClassementResponseDto } from './dto/classement-response.dto';
 
 @ApiTags('Tournois')
 @Controller('tournois')
@@ -49,6 +51,8 @@ export class TournoiController {
     private readonly tournoiService: TournoiService,
     @Inject(forwardRef(() => InscriptionService))
     private readonly inscriptionService: InscriptionService,
+    @Inject(forwardRef(() => EquipeService))
+    private readonly equipeService: EquipeService,
   ) {}
 
   @Post()
@@ -302,6 +306,59 @@ export class TournoiController {
   })
   getParticipants(@Param('tournoiId') tournoiId: string) {
     return this.inscriptionService.findByTournoi(tournoiId);
+  }
+
+  @Get(':id/classement')
+  @Roles(UserRole.PARENT, UserRole.COACH, UserRole.ACADEMIE)
+  @ApiOperation({ summary: 'Récupérer le classement d\'un tournoi (Parents/Coach/Académie)' })
+  @ApiParam({ name: 'id', description: 'ID du tournoi (MongoDB ObjectId)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Classement du tournoi avec les équipes et leurs enfants',
+    type: ClassementResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'ID de tournoi invalide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Tournoi non trouvé',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized',
+      },
+    },
+  })
+  @ApiForbiddenResponse({
+    description: 'Accès refusé : rôle insuffisant',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Tournoi non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Tournoi non trouvé',
+        error: 'Not Found',
+      },
+    },
+  })
+  getClassement(@Param('id') id: string) {
+    return this.equipeService.getClassement(id);
   }
 
  @Patch(':id')
