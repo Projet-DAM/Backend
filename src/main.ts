@@ -5,6 +5,9 @@ import { AppModule } from './app.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import * as dotenv from 'dotenv';
 import { existsSync, mkdirSync } from 'fs';
+import { WsAdapter } from '@nestjs/platform-ws'; // Import WsAdapter
+import { join } from 'path';
+import * as express from 'express';
 
 dotenv.config();
 
@@ -14,6 +17,32 @@ async function bootstrap() {
   if (!existsSync(uploadsDir)) {
     mkdirSync(uploadsDir, { recursive: true });
   }
+
+  // Find a free port first to avoid partial app startup logs followed by EADDRINUSE
+  const net = await import('net');
+  async function findFreePort(start: number, end: number): Promise<number> {
+    for (let p = start; p <= end; p++) {
+      // attempt to bind a temporary server
+      // eslint-disable-next-line no-await-in-loop
+      const free = await new Promise<boolean>((resolve) => {
+        const tester = net.createServer()
+          .once('error', () => {
+            resolve(false);
+          })
+          .once('listening', () => {
+            tester.close();
+            resolve(true);
+          })
+          .listen(p, '0.0.0.0');
+      });
+      if (free) return p;
+    }
+    throw new Error(`No free port in range ${start}-${end}`);
+  }
+
+  const defaultPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const maxProbePort = defaultPort + 10;
+  const selectedPort = await findFreePort(defaultPort, maxProbePort);
 
   const app = await NestFactory.create(AppModule);
 
@@ -27,7 +56,11 @@ async function bootstrap() {
   );
 
   // CORS
-  app.enableCors();
+  app.enableCors({
+    origin: '*', // Adjust this to your specific frontend URL in production
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
 
   // Configuration Swagger
   const config = new DocumentBuilder()
@@ -54,14 +87,21 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
+  // Enable WebSocket adapter
+  app.useWebSocketAdapter(new WsAdapter(app)); // Add this line
+
+  // Serve uploads statically at /uploads
+  const uploadsPath = join(__dirname, '..', 'uploads');
+  app.use('/uploads', express.static(uploadsPath));
+
   // Guard global (après configuration Swagger pour ne pas bloquer /api et /api-json)
   const reflector = app.get(Reflector);
   app.useGlobalGuards(new JwtAuthGuard(reflector));
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger documentation: http://localhost:${port}/api`);
+  // Listen on selected free port
+  await app.listen(selectedPort);
+  console.log(`Application is running on: http://localhost:${selectedPort}`);
+  console.log(`Swagger documentation: http://localhost:${selectedPort}/api`);
 }
+
 bootstrap();
-   

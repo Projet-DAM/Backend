@@ -22,6 +22,9 @@ export class CreateSuiviEnfantDto {
 
   @IsOptional()
   @IsString()
+  enfantName?: string; // Nom complet de l'enfant (coach selects a child; name derived if omitted)
+  @IsOptional()
+  @IsString()
   activityType?: string;
 
   @IsOptional()

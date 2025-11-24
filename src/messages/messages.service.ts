@@ -12,28 +12,27 @@ export class MessagesService {
     private usersService: UsersService, // Inject UsersService
   ) {}
 
-  async createMessage(createMessageDto: CreateMessageDto): Promise<Message> {
-    const { sender, receiver, conversationId, type, content, mediaUrl } = createMessageDto;
+  async createMessage(senderId: string, createMessageDto: CreateMessageDto): Promise<Message> { // senderId is now the first parameter
+    const { receiver, conversationId, type, content, mediaUrl } = createMessageDto;
 
-    // Validate sender and receiver
-    if (!Types.ObjectId.isValid(sender)) throw new BadRequestException('Invalid sender ID');
+    // Validate sender and receiver IDs
+    if (!Types.ObjectId.isValid(senderId)) throw new BadRequestException('Invalid sender ID');
     if (!Types.ObjectId.isValid(receiver)) throw new BadRequestException('Invalid receiver ID');
 
-    const senderUser = await this.usersService.findById(sender);
+    const senderUser = await this.usersService.findById(senderId);
     const receiverUser = await this.usersService.findById(receiver);
 
     if (!senderUser) throw new NotFoundException('Sender not found');
     if (!receiverUser) throw new NotFoundException('Receiver not found');
 
     const newMessage = new this.messageModel({
-      sender: new Types.ObjectId(sender),
+      sender: new Types.ObjectId(senderId), // Use the provided senderId
       receiver: new Types.ObjectId(receiver),
       conversationId,
       type,
       content: type === 'text' ? content : undefined, // Only set content for text messages
       mediaUrl: (type === 'image' || type === 'audio') ? mediaUrl : undefined, // Only set mediaUrl for media messages
     });
-
     return newMessage.save();
   }
 
@@ -48,21 +47,23 @@ export class MessagesService {
 
   async getUserConversations(userId: string): Promise<string[]> {
     if (!Types.ObjectId.isValid(userId)) throw new BadRequestException('Invalid user ID');
-
-    const conversations = await this.messageModel.distinct('conversationId', {
-      $or: [{ sender: new Types.ObjectId(userId) }, { receiver: new Types.ObjectId(userId) }],
-    }).exec();
-
+    const conversations = await this.messageModel
+      .distinct('conversationId', {
+        $or: [{ sender: new Types.ObjectId(userId) }, { receiver: new Types.ObjectId(userId) }],
+      })
+      .exec();
     return conversations;
   }
 
   async markMessageAsRead(messageId: string): Promise<Message> {
     if (!Types.ObjectId.isValid(messageId)) throw new BadRequestException('Invalid message ID');
-    const message = await this.messageModel.findByIdAndUpdate(
-      messageId,
-      { read: true },
-      { new: true },
-    ).exec();
+    const message = await this.messageModel
+      .findByIdAndUpdate(
+        messageId,
+        { read: true },
+        { new: true },
+      )
+      .exec();
     if (!message) throw new NotFoundException('Message not found');
     return message;
   }

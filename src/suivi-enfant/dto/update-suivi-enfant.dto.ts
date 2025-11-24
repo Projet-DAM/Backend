@@ -1,10 +1,9 @@
-import { IsDateString, IsBoolean, IsNumber, IsString, IsOptional } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsBoolean, IsNumber, IsString, IsArray } from 'class-validator';
 
 export class UpdateSuiviEnfantDto {
   @IsOptional()
-  @IsDateString()
-  date_suivi?: Date;
+  @IsString()
+  date_suivi?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -12,10 +11,19 @@ export class UpdateSuiviEnfantDto {
 
   @IsOptional()
   @IsNumber()
-  @Type(() => Number)
   performance?: number;
 
   @IsOptional()
   @IsString()
   commentaire?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  focusAreas?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  nextSessionGoals?: string[];
 }

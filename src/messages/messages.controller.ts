@@ -20,11 +20,7 @@ import { Request } from 'express';
 import { Types } from 'mongoose';
 
 interface CustomRequest extends Request {
-  user: {
-    userId: string;
-    email: string;
-    role: UserRole;
-  };
+  user: { userId: string; email: string; role: UserRole; };
 }
 
 @ApiTags('Messages')
@@ -41,13 +37,22 @@ export class MessagesController {
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden: Role mismatch' })
-  async createMessage(@Body() createMessageDto: CreateMessageDto): Promise<any> {
+  async createMessage(
+    @Body() createMessageDto: CreateMessageDto,
+    @Req() req: CustomRequest,
+  ): Promise<any> {
+    const senderId = req.user.userId;
+    console.log('Received message request from user with role:', req.user.role); // Keep this for debugging
+
     // Basic validation to ensure sender is either coach or parent, and receiver is the other role
-    const senderUser = await this.messagesService['usersService'].findById(createMessageDto.sender);
+    const senderUser = await this.messagesService['usersService'].findById(senderId); // Use senderId here
     const receiverUser = await this.messagesService['usersService'].findById(createMessageDto.receiver);
 
-    if (!senderUser || !receiverUser) {
-      throw new BadRequestException('Sender or receiver not found.');
+    if (!senderUser) {
+      throw new BadRequestException('Authenticated sender not found.');
+    }
+    if (!receiverUser) {
+      throw new BadRequestException('Receiver not found.');
     }
 
     if (
@@ -59,12 +64,8 @@ export class MessagesController {
       throw new BadRequestException('Messages can only be sent between a COACH and a PARENT.');
     }
 
-    // You might want to generate conversationId based on sender and receiver IDs here
-    // For simplicity, for now, we assume conversationId is provided by the client
-    // For proper conversation management, you might create a dedicated service
-    // to manage and retrieve conversation IDs based on two user IDs.
-
-    return this.messagesService.createMessage(createMessageDto);
+    // Pass the senderId to the service
+    return this.messagesService.createMessage(senderId, createMessageDto);
   }
 
   @Get('conversation/:conversationId')
@@ -78,12 +79,8 @@ export class MessagesController {
     @Param('conversationId') conversationId: string,
     @Req() req: CustomRequest,
   ): Promise<any[]> {
-    // Add logic here to verify that the requesting user (req.user.userId)
-    // is a participant in this conversationId to prevent unauthorized access.
-    // For now, it fetches all messages for the conversation.
     const messages = await this.messagesService.getConversationMessages(conversationId);
 
-    // Further authorization: ensure requesting user is part of the conversation
     if (messages.length > 0) {
       const isParticipant = messages.some(
         (message) =>
@@ -94,24 +91,19 @@ export class MessagesController {
         throw new BadRequestException('You are not a participant in this conversation.');
       }
     } else {
-        // If no messages exist, check if the conversation ID is valid by ensuring it's a combination of two user IDs
-        // This is a placeholder; a more robust solution would involve a dedicated ConversationService
-        const [user1Id, user2Id] = conversationId.split('-'); // Assuming conversationId is like "userId1-userId2"
-        if (!user1Id || !user2Id || !Types.ObjectId.isValid(user1Id) || !Types.ObjectId.isValid(user2Id)) {
-            throw new BadRequestException('Invalid conversation ID format or no messages found.');
-        }
-        const user1 = await this.messagesService['usersService'].findById(user1Id);
-        const user2 = await this.messagesService['usersService'].findById(user2Id);
-        if (!user1 || !user2) {
-             throw new NotFoundException('One or both users in the conversation not found.');
-        }
-        // If both users exist, and the current user is one of them, then it's a valid empty conversation
-        if (req.user.userId !== user1Id && req.user.userId !== user2Id) {
-             throw new BadRequestException('You are not a participant in this conversation.');
-        }
+      const [user1Id, user2Id] = conversationId.split('-');
+      if (!user1Id || !user2Id || !Types.ObjectId.isValid(user1Id) || !Types.ObjectId.isValid(user2Id)) {
+        throw new BadRequestException('Invalid conversation ID format or no messages found.');
+      }
+      const user1 = await this.messagesService['usersService'].findById(user1Id);
+      const user2 = await this.messagesService['usersService'].findById(user2Id);
+      if (!user1 || !user2) {
+        throw new NotFoundException('One or both users in the conversation not found.');
+      }
+      if (req.user.userId !== user1Id && req.user.userId !== user2Id) {
+        throw new BadRequestException('You are not a participant in this conversation.');
+      }
     }
-
-
     return messages;
   }
 
@@ -123,7 +115,6 @@ export class MessagesController {
   async getMyConversations(@Req() req: CustomRequest): Promise<string[]> {
     return this.messagesService.getUserConversations(req.user.userId);
   }
-
 
   @Patch(':id/read')
   @Roles(UserRole.COACH, UserRole.PARENT)
@@ -137,8 +128,6 @@ export class MessagesController {
     @Param('id') messageId: string,
     @Req() req: CustomRequest,
   ): Promise<any> {
-    // Add authorization logic to ensure the requesting user is the receiver of the message
-    // before marking it as read.
     const message = await this.messagesService.markMessageAsRead(messageId);
     if (message.receiver.toString() !== req.user.userId) {
       throw new BadRequestException('You are not authorized to mark this message as read.');

@@ -1,17 +1,7 @@
-import {
-  IsString,
-  IsEnum,
-  IsOptional,
-  IsMongoId,
-  MaxLength,
-  IsUrl,
-} from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsMongoId, MaxLength, IsUrl } from 'class-validator';
 import { MessageType } from '../message.schema';
 
 export class CreateMessageDto {
-  @IsMongoId()
-  sender: string;
-
   @IsMongoId()
   receiver: string;
 
