@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './entity/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -9,6 +9,8 @@ import { UserRole } from './interfaces/user-role.enum';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) {}
@@ -35,7 +37,7 @@ export class UsersService {
     }
 
     if (createUserDto.role === UserRole.ENFANT) {
-      // Un enfant ne peut pas avoir d'attribut enfants, mais peut avoir un parent
+      // Un enfant ne peut pas avoir d'attribut enfants, mais peut avoir un parent et un coach
       delete userData.enfants;
       // Supprimer les attributs spécifiques aux autres rôles
       delete userData.certification;
@@ -48,6 +50,7 @@ export class UsersService {
     } else if (createUserDto.role === UserRole.PARENT) {
       // Un parent peut avoir des enfants, mais ne peut pas avoir d'attribut parent
       delete userData.parent;
+      delete userData.coach;
       // Supprimer les attributs spécifiques aux autres rôles
       delete userData.dateNaissance;
       delete userData.certification;
@@ -61,6 +64,7 @@ export class UsersService {
       // Un coach ne peut pas avoir d'attributs enfants/parent
       delete userData.enfants;
       delete userData.parent;
+      delete userData.coach;
       // Supprimer les attributs spécifiques aux autres rôles
       delete userData.dateNaissance;
       delete userData.nomAcademie;
@@ -71,6 +75,7 @@ export class UsersService {
       // Une académie ne peut pas avoir d'attributs enfants/parent
       delete userData.enfants;
       delete userData.parent;
+      delete userData.coach;
       // Supprimer les attributs spécifiques aux autres rôles
       delete userData.dateNaissance;
       delete userData.certification;
@@ -80,6 +85,7 @@ export class UsersService {
       // Pour les autres rôles, aucun des attributs spécifiques
       delete userData.enfants;
       delete userData.parent;
+      delete userData.coach;
     }
 
     const user = new this.userModel(userData);
@@ -88,11 +94,21 @@ export class UsersService {
 
   async findAll(role?: UserRole): Promise<UserDocument[]> {
     const query = role ? { role } : {};
-    return this.userModel.find(query).populate('enfants').populate('parent').exec();
+    return this.userModel
+      .find(query)
+      .populate('enfants')
+      .populate('parent')
+      .populate('coach')
+      .exec();
   }
 
   async findById(id: string): Promise<UserDocument | null> {
-    return this.userModel.findById(id).populate('enfants').populate('parent').exec();
+    return this.userModel
+      .findById(id)
+      .populate('enfants')
+      .populate('parent')
+      .populate('coach')
+      .exec();
   }
 
   async findByEmail(email: string): Promise<UserDocument | null> {
@@ -138,11 +154,14 @@ export class UsersService {
       if ('nomAcademie' in updateUserDto || 'adresse' in updateUserDto || 'description' in updateUserDto || 'horaires' in updateUserDto) {
         throw new BadRequestException('Un enfant ne peut pas avoir d\'attributs d\'académie');
       }
-      // Un enfant peut avoir un parent (géré via linkChild)
+      // Un enfant peut avoir un parent (géré via linkChild) et un coach
     } else if (finalRole === UserRole.PARENT) {
       // Un parent peut avoir des enfants (géré via linkChild), mais ne peut pas avoir d'attribut parent
       if ('parent' in updateUserDto) {
         throw new BadRequestException('Un parent ne peut pas avoir d\'attribut parent');
+      }
+      if ('coach' in updateUserDto) {
+        throw new BadRequestException('Un parent ne peut pas avoir de coach');
       }
       // S'assurer que le parent n'a pas de parent dans la base
       if (user.parent) {
@@ -166,6 +185,9 @@ export class UsersService {
       if ('parent' in updateUserDto) {
         throw new BadRequestException('Un coach ne peut pas avoir d\'attribut parent');
       }
+      if ('coach' in updateUserDto) {
+        throw new BadRequestException('Un coach ne peut pas avoir de coach');
+      }
       if (user.enfants && user.enfants.length > 0) {
         user.enfants = [];
       }
@@ -186,6 +208,9 @@ export class UsersService {
       }
       if ('parent' in updateUserDto) {
         throw new BadRequestException('Une académie ne peut pas avoir d\'attribut parent');
+      }
+      if ('coach' in updateUserDto) {
+        throw new BadRequestException('Une académie ne peut pas avoir de coach');
       }
       if (user.enfants && user.enfants.length > 0) {
         user.enfants = [];
@@ -208,6 +233,9 @@ export class UsersService {
       if ('parent' in updateUserDto) {
         throw new BadRequestException('Ce rôle ne peut pas avoir d\'attribut parent');
       }
+      if ('coach' in updateUserDto) {
+        throw new BadRequestException('Ce rôle ne peut pas avoir de coach');
+      }
       if (user.enfants && user.enfants.length > 0) {
         user.enfants = [];
       }
@@ -226,7 +254,11 @@ export class UsersService {
   }
 
   async remove(id: string): Promise<void> {
-    const result = await this.userModel.findByIdAndDelete(id);
+    const cleanId = id && typeof id === 'string' ? id.trim() : id;
+    if (!Types.ObjectId.isValid(cleanId)) {
+      throw new BadRequestException('id invalide');
+    }
+    const result = await this.userModel.findByIdAndDelete(cleanId);
     if (!result) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
@@ -278,7 +310,8 @@ export class UsersService {
   }
 
   async getChildren(parentId: string): Promise<UserDocument[]> {
-    const parent = await this.userModel.findById(parentId).populate('enfants').exec();
+    this.logger.debug(`getChildren called for parentId=${parentId}`);
+    const parent = await this.userModel.findById(parentId).exec();
     if (!parent) {
       throw new NotFoundException('Parent non trouvé');
     }
@@ -287,18 +320,101 @@ export class UsersService {
       throw new BadRequestException('L\'utilisateur doit être un parent');
     }
 
-    if (!parent.enfants || parent.enfants.length === 0) {
-      return [];
-    }
-
-    // Récupérer les IDs des enfants (après populate, ils peuvent être ObjectId ou UserDocument)
-    const childrenIds = parent.enfants.map((child: any) => {
-      return child._id ? child._id : child;
-    });
-
-    // Récupérer les enfants complets depuis la base de données
-    const children = await this.userModel.find({ _id: { $in: childrenIds } }).exec();
+    // Find children linked either by `parent` field or by `createdBy` (parent-created)
+    const queryParentId = Types.ObjectId.isValid(parentId) ? new Types.ObjectId(parentId) : parentId;
+    const children = await this.userModel.find({
+      $and: [
+        { role: UserRole.ENFANT },
+        { $or: [{ parent: queryParentId }, { createdBy: queryParentId }] },
+      ],
+    }).exec();
+    this.logger.debug(`getChildren result count=${children.length} for parentId=${parentId}`);
     return children;
+  }
+
+  /**
+   * Return a compact list of all children for dropdowns (id, prenom, nom, fullName)
+   */
+  async findAllChildrenCompact(): Promise<Array<{ _id: string; prenom: string; nom: string; fullName: string }>> {
+    const enfants = await this.userModel.find({ role: UserRole.ENFANT }).select('prenom nom').exec();
+    return enfants.map((e: any) => ({ _id: e._id.toString(), prenom: e.prenom, nom: e.nom, fullName: `${e.prenom ?? ''} ${e.nom ?? ''}`.trim() }));
+  }
+
+  /**
+   * Return a compact list of all children including owner fields so callers
+   * can compute `ownedByRequester` without additional DB round-trips.
+   */
+  async findAllChildrenCompactWithOwners(): Promise<Array<{ _id: string; prenom: string; nom: string; fullName: string; parent?: string; createdBy?: string }>> {
+    const enfants = await this.userModel.find({ role: UserRole.ENFANT }).select('prenom nom parent createdBy').exec();
+    return enfants.map((e: any) => ({
+      _id: e._id.toString(),
+      prenom: e.prenom,
+      nom: e.nom,
+      fullName: `${e.prenom ?? ''} ${e.nom ?? ''}`.trim(),
+      parent: e.parent && e.parent.toString ? e.parent.toString() : e.parent,
+      createdBy: e.createdBy && e.createdBy.toString ? e.createdBy.toString() : e.createdBy,
+    }));
+  }
+
+  /**
+   * Return a compact list of children for a specific parent.
+   * Handles ObjectId vs string by normalizing the parentId when possible.
+   */
+  async findChildrenCompactByParent(parentId: string): Promise<Array<{ _id: string; prenom: string; nom: string; fullName: string }>> {
+    const queryParentId = Types.ObjectId.isValid(parentId) ? new Types.ObjectId(parentId) : parentId;
+    // select parent and createdBy for debugging and defensive filtering
+    const enfants = await this.userModel.find({
+      $and: [
+        { role: UserRole.ENFANT },
+        { $or: [{ parent: queryParentId }, { createdBy: queryParentId }] },
+      ],
+    }).select('prenom nom parent createdBy').exec();
+    this.logger.debug(`findChildrenCompactByParent parent=${queryParentId} -> found=${enfants.length}`);
+    // map including parent id so callers can defensively verify linkage
+    return enfants.map((e: any) => ({ _id: e._id.toString(), prenom: e.prenom, nom: e.nom, fullName: `${e.prenom ?? ''} ${e.nom ?? ''}`.trim(), parent: e.parent && e.parent.toString ? e.parent.toString() : e.parent, createdBy: e.createdBy && e.createdBy.toString ? e.createdBy.toString() : e.createdBy }));
+  }
+
+  // Create a child user and link it to the given parent
+  async createChildForParent(parentId: string, createChildDto: any): Promise<any> {
+    const parent = await this.userModel.findById(parentId);
+    if (!parent) {
+      throw new NotFoundException('Parent non trouvé');
+    }
+    if (parent.role !== UserRole.PARENT) {
+      throw new BadRequestException('L\'utilisateur cible doit être un parent');
+    }
+    // Build full CreateUserDto for the child, auto-generate email/password if not provided
+    const timestamp = Date.now();
+    const generatedEmail = `${parentId}-${createChildDto.prenom || 'child'}-${timestamp}@local`;
+    const generatedPassword = Math.random().toString(36).slice(-8);
+
+    const payload: any = {
+      nom: createChildDto.nom,
+      prenom: createChildDto.prenom,
+      role: UserRole.ENFANT,
+      dateNaissance: createChildDto.dateNaissance,
+      photoProfil: createChildDto.photoProfil,
+      email: createChildDto.email ?? generatedEmail,
+      motDePasse: createChildDto.motDePasse ?? generatedPassword,
+    };
+
+    const child = await this.create(payload);
+
+    // Link child to parent
+    await this.linkChild(parentId, child._id.toString());
+
+    return {
+      child,
+      generatedCredentials: {
+        email: payload.email,
+        motDePasse: payload.motDePasse,
+      },
+    };
+  }
+
+  // Récupérer les enfants d'un coach (utilisé par les coaches pour sélectionner un enfant)
+  async getChildrenOfCoach(coachId: string): Promise<UserDocument[]> {
+    return this.userModel.find({ coach: coachId, role: UserRole.ENFANT }).exec();
   }
 }
 

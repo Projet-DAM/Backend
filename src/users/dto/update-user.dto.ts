@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength, IsArray, IsNumber, IsDateString, IsObject } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, MinLength, IsArray, IsNumber, IsDateString, IsObject, IsMongoId } from 'class-validator';
 import { UserRole } from '../interfaces/user-role.enum';
 
 export class UpdateUserDto {
@@ -126,5 +126,11 @@ export class UpdateUserDto {
       fin: string;
     };
   };
+
+  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'ID du coach à assigner (utilisé pour les enfants)', required: false })
+  @IsOptional()
+  @IsMongoId()
+  @IsString()
+  coach?: string;
 }
 
