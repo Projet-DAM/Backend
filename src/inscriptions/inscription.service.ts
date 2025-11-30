@@ -1,16 +1,21 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Inscription, InscriptionDocument } from './inscription.schema';
 import { CreateInscriptionDto } from './dto/create-inscription.dto';
 import { UpdateInscriptionDto } from './dto/update-inscription.dto';
 import { TournoiService } from '../tournoi/tournoi.service';
+import { TournoiDocument } from '../tournoi/schemas/tournoi.schema';
+import { NotificationService } from '../notifications/notification.service';
 
 @Injectable()
 export class InscriptionService {
+  private readonly logger = new Logger(InscriptionService.name);
+
   constructor(
     @InjectModel(Inscription.name) private inscriptionModel: Model<InscriptionDocument>,
     private tournoiService: TournoiService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(createInscriptionDto: CreateInscriptionDto): Promise<InscriptionDocument> {
@@ -37,7 +42,11 @@ export class InscriptionService {
     };
 
     const inscription = new this.inscriptionModel(inscriptionData);
-    return inscription.save();
+    const savedInscription = await inscription.save();
+
+    await this.sendCoachNotification(savedInscription, tournoi);
+
+    return savedInscription;
   }
 
   async findByTournoi(tournoiId: string): Promise<InscriptionDocument[]> {
@@ -100,6 +109,14 @@ export class InscriptionService {
     const result = await this.inscriptionModel.findByIdAndDelete(id);
     if (!result) {
       throw new NotFoundException('Inscription non trouvée');
+    }
+  }
+
+  private async sendCoachNotification(inscription: InscriptionDocument, tournoi: TournoiDocument): Promise<void> {
+    try {
+      await this.notificationService.sendToCoaches(inscription, tournoi);
+    } catch (error) {
+      this.logger.warn(`Impossible d'envoyer la notification Firebase : ${(error as Error).message}`);
     }
   }
 }

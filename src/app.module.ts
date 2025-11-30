@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { TournoiModule } from './tournoi/tournoi.module';
 import { InscriptionModule } from './inscriptions/inscription.module';
 import { EquipeModule } from './equipes/equipe.module';
+import { FirebaseModule } from './firebase/firebase.module';
+import { NotificationModule } from './notifications/notification.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { EquipeModule } from './equipes/equipe.module';
     TournoiModule,
     InscriptionModule,
     EquipeModule,
+    FirebaseModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
