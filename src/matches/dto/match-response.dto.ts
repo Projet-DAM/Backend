@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MatchPhase } from '../interfaces/match-phase.enum';
 import { MatchStatut } from '../interfaces/match-statut.enum';
+import { EquipeResponseDto } from '../../equipes/dto/equipe-response.dto';
 
 export class MatchResponseDto {
   @ApiProperty({ example: '507f1f77bcf86cd799439031', description: 'ID unique du match' })
@@ -9,11 +10,21 @@ export class MatchResponseDto {
   @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'ID du tournoi' })
   tournoiId: string;
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439021', description: 'ID de l\'équipe A' })
-  equipeA: string;
+  @ApiProperty({
+    type: () => EquipeResponseDto,
+    description: 'Équipe A avec ses détails complets',
+    nullable: true,
+    required: false,
+  })
+  equipeA?: EquipeResponseDto | null;
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439022', description: 'ID de l\'équipe B' })
-  equipeB: string;
+  @ApiProperty({
+    type: () => EquipeResponseDto,
+    description: 'Équipe B avec ses détails complets',
+    nullable: true,
+    required: false,
+  })
+  equipeB?: EquipeResponseDto | null;
 
   @ApiProperty({
     example: 'quart_final',
@@ -48,12 +59,12 @@ export class MatchResponseDto {
   scoreEquipeB?: number | null;
 
   @ApiProperty({
-    example: '507f1f77bcf86cd799439021',
-    description: 'ID de l\'équipe vainqueur',
+    type: () => EquipeResponseDto,
+    description: 'Équipe vainqueur avec ses détails complets',
     nullable: true,
     required: false,
   })
-  vainqueur?: string | null;
+  vainqueur?: EquipeResponseDto | null;
 
   @ApiProperty({
     example: '507f1f77bcf86cd799439032',

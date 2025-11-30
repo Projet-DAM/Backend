@@ -253,9 +253,9 @@ export class MatchesService {
 
     return this.matchModel
       .find(query)
-      .populate('equipeA')
-      .populate('equipeB')
-      .populate('vainqueur')
+      .populate({ path: 'equipeA', populate: { path: 'enfants' } })
+      .populate({ path: 'equipeB', populate: { path: 'enfants' } })
+      .populate({ path: 'vainqueur', populate: { path: 'enfants' } })
       .sort({ phase: 1, ordre: 1 })
       .exec();
   }
@@ -288,9 +288,9 @@ export class MatchesService {
 
     const match = await this.matchModel
       .findById(id)
-      .populate('equipeA')
-      .populate('equipeB')
-      .populate('vainqueur')
+      .populate({ path: 'equipeA', populate: { path: 'enfants' } })
+      .populate({ path: 'equipeB', populate: { path: 'enfants' } })
+      .populate({ path: 'vainqueur', populate: { path: 'enfants' } })
       .exec();
 
     if (!match) {
@@ -307,6 +307,9 @@ export class MatchesService {
     }
   }
 }
+
+
+
 
 
 
