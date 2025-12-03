@@ -11,8 +11,8 @@ Ouvrez le fichier `.env` dans `C:\Users\hatem\OneDrive\Bureau\Backend\` et ajout
 
 ```env
 # Stripe Configuration
-STRIPE_SECRET_KEY=sk_test_51SToB0QkN55ayShybsJotVNLoTT01Mp5IaN5yB45geP5KD3X9Yw3tTslBS3zlhdlksa2iU2PeUxTcrnHK1BbRwnA00DhYhJlIb
-STRIPE_PUBLISHABLE_KEY=pk_test_51SToB0QkN55ayShyAGms4vrDrYbnnV3va3lM4d7wK2cb69auigr5FinMoCDruQHqDwyDvWZfywjfHabxreHnUXis00f2q0xUzS
+STRIPE_SECRET_KEY=sk_test_51SV9DGHQ95HR9DAI2oVkJgxhwzJGTIaspfxrziZUsglPtwGuBmOXdBEhQj7X3nZSoJhLNRI0B9hrX23IiOiBBUel00KvsbelPY
+STRIPE_PUBLISHABLE_KEY=pk_test_51SV9DGHQ95HR9DAIM06ZwtZcdrI4VWkwDvZ5SToJa1gWrRdk4mKrm6ZmNmlrYZmIdBubtxOyzD5POs5ImqCVBk6W00VGzt9lMG
 ```
 
 ## Étapes
@@ -25,6 +25,11 @@ STRIPE_PUBLISHABLE_KEY=pk_test_51SToB0QkN55ayShyAGms4vrDrYbnnV3va3lM4d7wK2cb69au
 ## Vérification
 
 Après avoir ajouté les variables et redémarré le serveur, vous ne devriez plus voir l'erreur `STRIPE_SECRET_KEY is not configured`.
+
+
+
+
+
 
 
 
