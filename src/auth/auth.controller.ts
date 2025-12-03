@@ -4,11 +4,15 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBody,
+  ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginUserDto } from '../users/dto/login-user.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { Public } from '../common/decorators/public.decorator';
+import { AuthResponseDto } from './dto/auth-response.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -23,21 +27,28 @@ export class AuthController {
   @ApiResponse({
     status: 201,
     description: 'Utilisateur créé et authentifié avec succès',
+    type: AuthResponseDto,
+  })
+  @ApiBadRequestResponse({ 
+    description: 'Données invalides',
     schema: {
       example: {
-        access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        user: {
-          id: '507f1f77bcf86cd799439011',
-          email: 'jean.dupont@example.com',
-          nom: 'Dupont',
-          prenom: 'Jean',
-          role: 'parent',
-          photoProfil: null,
-        },
-      },
-    },
+        statusCode: 400,
+        message: ['email must be an email', 'motDePasse must be longer than or equal to 6 characters'],
+        error: 'Bad Request'
+      }
+    }
   })
-  @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
+  @ApiConflictResponse({ 
+    description: 'Email déjà utilisé',
+    schema: {
+      example: {
+        statusCode: 409,
+        message: 'Cet email est déjà utilisé',
+        error: 'Conflict'
+      }
+    }
+  })
   register(@Body() createUserDto: CreateUserDto) {
     return this.authService.register(createUserDto);
   }
@@ -50,21 +61,28 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: 'Connexion réussie',
+    type: AuthResponseDto,
+  })
+  @ApiBadRequestResponse({ 
+    description: 'Données invalides',
     schema: {
       example: {
-        access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        user: {
-          id: '507f1f77bcf86cd799439011',
-          email: 'jean.dupont@example.com',
-          nom: 'Dupont',
-          prenom: 'Jean',
-          role: 'parent',
-          photoProfil: null,
-        },
-      },
-    },
+        statusCode: 400,
+        message: ['email must be an email', 'motDePasse should not be empty'],
+        error: 'Bad Request'
+      }
+    }
   })
-  @ApiResponse({ status: 401, description: 'Email ou mot de passe incorrect' })
+  @ApiUnauthorizedResponse({ 
+    description: 'Email ou mot de passe incorrect',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Email ou mot de passe incorrect',
+        error: 'Unauthorized'
+      }
+    }
+  })
   login(@Body() loginUserDto: LoginUserDto) {
     return this.authService.login(loginUserDto);
   }
