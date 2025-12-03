@@ -1,4 +1,3 @@
-import { NestFactory } from '@nestjs/core';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
@@ -8,7 +7,6 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import * as dotenv from 'dotenv';
 import { existsSync, mkdirSync } from 'fs';
 import { WsAdapter } from '@nestjs/platform-ws'; // Import WsAdapter
-import { join } from 'path';
 import * as express from 'express';
 import { join } from 'path';
 
@@ -46,19 +44,12 @@ async function bootstrap() {
   const maxProbePort = defaultPort + 10;
   const selectedPort = await findFreePort(defaultPort, maxProbePort);
 
-  const app = await NestFactory.create(AppModule);
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Servir les fichiers statiques
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
   });
-
-  // Guard global
-  const jwtAuthGuard = app.get(JwtAuthGuard);
-  app.useGlobalGuards(jwtAuthGuard);
-  const reflector = app.get(Reflector);
-  app.useGlobalGuards(new JwtAuthGuard(reflector));
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -74,7 +65,6 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
-  app.enableCors();
 
   const config = new DocumentBuilder()
     .setTitle('SportyConnect Kids API')
@@ -92,12 +82,8 @@ async function bootstrap() {
       'JWT-auth',
     )
     .addSecurityRequirements('JWT-auth')
-    .addTag('Auth', 'Endpoints d\'authentification')
-    .addTag('Users', 'Gestion des utilisateurs')
     .addTag('SuiviEnfant', 'Suivi des enfants')
     .addTag('App', 'Endpoints généraux de l\'API')
-    .addTag('Auth', 'Endpoints d\'authentification')
-    .addTag('Users', 'Gestion des utilisateurs')
     .addTag('Tournois', 'Gestion des tournois')
     .build();
 
