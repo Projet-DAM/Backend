@@ -1,3 +1,4 @@
+import { UserRole } from './interfaces/user-role.enum';
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -5,7 +6,6 @@ import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './entity/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UserRole } from './interfaces/user-role.enum';
 
 @Injectable()
 export class UsersService {
@@ -14,6 +14,47 @@ export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) {}
+
+  async removeChild(childId: string, parentId: string): Promise<{ success: boolean; childId: string }> {
+    if (!Types.ObjectId.isValid(childId)) {
+      throw new BadRequestException('childId invalide');
+    }
+    if (!Types.ObjectId.isValid(parentId)) {
+      throw new BadRequestException('parentId invalide');
+    }
+    // Vérifier que l'enfant existe et appartient bien au parent
+    const child = await this.userModel.findById(childId);
+    if (!child) {
+      throw new NotFoundException("Enfant non trouvé");
+    }
+    if (child.role !== UserRole.ENFANT) {
+      throw new BadRequestException("L'utilisateur n'est pas un enfant");
+    }
+    // Autoriser la suppression si le demandeur est le parent lié OU si c'est une académie
+    let isAuthorized = false;
+    // Parent lié ?
+    if (child.parent && child.parent.toString() === parentId) {
+      isAuthorized = true;
+    } else if ('createdBy' in child && child['createdBy'] && child['createdBy'].toString() === parentId) {
+      isAuthorized = true;
+    }
+    // Si le parentId correspond à un utilisateur de rôle ACADEMIE, autoriser aussi
+    const requester = await this.userModel.findById(parentId);
+    if (requester && requester.role === UserRole.ACADEMIE) {
+      isAuthorized = true;
+    }
+    if (!isAuthorized) {
+      throw new BadRequestException("Non autorisé à supprimer cet enfant");
+    }
+    // Supprimer l'enfant de la liste des enfants du parent
+    await this.userModel.updateOne(
+      { _id: parentId },
+      { $pull: { enfants: child._id } }
+    );
+    // Supprimer l'enfant de la base
+    await this.userModel.findByIdAndDelete(childId);
+    return { success: true, childId };
+  }
 
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
     // Vérifier si l'email existe déjà

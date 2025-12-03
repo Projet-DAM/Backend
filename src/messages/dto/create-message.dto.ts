@@ -18,6 +18,5 @@ export class CreateMessageDto {
 
   @IsOptional()
   @IsString()
-  @IsUrl({ require_tld: false, allow_protocol_relative_urls: true }, { message: 'Media URL must be a valid URL' })
   mediaUrl?: string;
 }

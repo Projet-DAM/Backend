@@ -28,7 +28,36 @@ interface CustomRequest extends Request {
 @UseGuards(JwtAuthGuard)
 @Controller('messages')
 export class MessagesController {
+
   constructor(private readonly messagesService: MessagesService) {}
+
+  @Post('conversation/init')
+  @Roles(UserRole.COACH, UserRole.PARENT)
+  @ApiOperation({ summary: 'Initier une conversation entre deux utilisateurs (coach/parent)' })
+  @ApiResponse({ status: 200, description: 'conversationId généré ou récupéré' })
+  async initiateConversation(
+    @Req() req: CustomRequest,
+    @Body() body: { otherUserId: string }
+  ) {
+    const currentUserId = req.user.userId;
+    const { otherUserId } = body;
+    if (!otherUserId) throw new BadRequestException('otherUserId requis');
+    const conversationId = await this.messagesService.getOrCreateConversationId(
+      currentUserId,
+      otherUserId
+    );
+    return { conversationId };
+  }
+
+  @Get('conversation-id/:userId')
+  @Roles(UserRole.COACH, UserRole.PARENT)
+  @ApiOperation({ summary: 'Obtenir le conversationId unique pour discuter avec un utilisateur (coach/parent)' })
+  @ApiParam({ name: 'userId', type: 'string', description: "ID de l'autre utilisateur (coach ou parent)" })
+  @ApiResponse({ status: 200, description: 'conversationId généré' })
+  getConversationId(@Param('userId') userId: string, @Req() req: CustomRequest) {
+    const myId = req.user.userId;
+    return { conversationId: MessagesService.generateConversationId(myId, userId) };
+  }
 
   @Post()
   @Roles(UserRole.COACH, UserRole.PARENT)
@@ -79,32 +108,7 @@ export class MessagesController {
     @Param('conversationId') conversationId: string,
     @Req() req: CustomRequest,
   ): Promise<any[]> {
-    const messages = await this.messagesService.getConversationMessages(conversationId);
-
-    if (messages.length > 0) {
-      const isParticipant = messages.some(
-        (message) =>
-          message.sender.toString() === req.user.userId ||
-          message.receiver.toString() === req.user.userId,
-      );
-      if (!isParticipant) {
-        throw new BadRequestException('You are not a participant in this conversation.');
-      }
-    } else {
-      const [user1Id, user2Id] = conversationId.split('-');
-      if (!user1Id || !user2Id || !Types.ObjectId.isValid(user1Id) || !Types.ObjectId.isValid(user2Id)) {
-        throw new BadRequestException('Invalid conversation ID format or no messages found.');
-      }
-      const user1 = await this.messagesService['usersService'].findById(user1Id);
-      const user2 = await this.messagesService['usersService'].findById(user2Id);
-      if (!user1 || !user2) {
-        throw new NotFoundException('One or both users in the conversation not found.');
-      }
-      if (req.user.userId !== user1Id && req.user.userId !== user2Id) {
-        throw new BadRequestException('You are not a participant in this conversation.');
-      }
-    }
-    return messages;
+    return this.messagesService.getConversationMessages(conversationId, req.user.userId);
   }
 
   @Get('conversations/my')

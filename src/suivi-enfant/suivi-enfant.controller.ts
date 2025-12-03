@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Get, Param, Patch, Delete, Req } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Patch, Delete, Req, UseGuards, Request } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { SuiviEnfantService } from './suivi-enfant.service';
 import { CreateSuiviEnfantDto } from './dto/create-suivi-enfant.dto';
@@ -15,6 +16,30 @@ export class SuiviEnfantController {
     private readonly suiviEnfantService: SuiviEnfantService,
     private readonly usersService: UsersService,
   ) {}
+
+
+  @Get('available-coaches')
+  @UseGuards(JwtAuthGuard)
+  async getAvailableCoaches(@Request() req) {
+    const userId = req.user.sub || req.user.userId || req.user.id;
+    return this.suiviEnfantService.getAvailableCoaches(userId);
+  }
+
+  @Get('available-parents')
+  @UseGuards(JwtAuthGuard)
+  async getAvailableParents(@Request() req) {
+    const userId = req.user.sub || req.user.userId || req.user.id;
+    return this.suiviEnfantService.getAvailableParents(userId);
+  }
+
+  @Get('parents')
+  @Roles(UserRole.COACH)
+  @ApiOperation({ summary: 'Lister les parents ayant au moins un enfant suivi par le coach connecté' })
+  @ApiResponse({ status: 200, description: 'Liste des parents' })
+  getParentsForCoach(@Req() req: any) {
+    return this.suiviEnfantService.getParentsForCoach(req.user.userId);
+  }
+
 
   @Post()
   @ApiBearerAuth('JWT-auth')

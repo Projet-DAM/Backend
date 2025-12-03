@@ -56,6 +56,29 @@ export class UsersController {
 
   private readonly logger = new Logger(UsersController.name);
 
+  @Delete('children/:childId')
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.PARENT, UserRole.ACADEMIE)
+  @ApiOperation({ summary: 'Supprimer un enfant (PARENT ou ACADEMIE)' })
+  @ApiParam({ name: 'childId', description: "ID de l'enfant à supprimer" })
+  @ApiResponse({ status: 200, description: 'Enfant supprimé avec succès' })
+  @ApiResponse({ status: 403, description: 'Non autorisé à supprimer cet enfant' })
+  @ApiResponse({ status: 404, description: 'Enfant non trouvé' })
+  async deleteChild(
+    @Param('childId') childId: string,
+    @Req() req: any
+  ): Promise<{ success: boolean; childId: string }> {
+    const tokenUserId = req?.user?.userId;
+    if (!req || !req.user || !tokenUserId) {
+      throw new UnauthorizedException('Token manquant ou invalide');
+    }
+    if (!childId || !Types.ObjectId.isValid(childId)) {
+      throw new BadRequestException({ message: "childId invalide" });
+    }
+    // Supprimer l'enfant (le service gère l'autorisation parent/académie)
+    return this.usersService.removeChild(childId, tokenUserId);
+  }
+
   @Post(':id/children')
   @Roles(UserRole.PARENT)
   @ApiOperation({ summary: 'Créer un enfant et le lier au parent (PARENT uniquement)' })
@@ -219,7 +242,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ACADEMIE)
+  @Roles(UserRole.PARENT)
   @ApiOperation({ summary: 'Supprimer un utilisateur (Académie uniquement)' })
   @ApiParam({ name: 'id', description: 'ID de l\'utilisateur' })
   @ApiResponse({ status: 200, description: 'Utilisateur supprimé' })

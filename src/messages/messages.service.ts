@@ -1,3 +1,4 @@
+
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -7,13 +8,29 @@ import { UsersService } from '../users/users.service'; // Assuming UsersService 
 
 @Injectable()
 export class MessagesService {
+    /**
+     * Génère ou récupère un conversationId unique pour deux utilisateurs (coach/parent)
+     */
+    async getOrCreateConversationId(userId1: string, userId2: string): Promise<string> {
+      // Pour l'instant, conversationId déterministe sans stockage DB
+      // Si vous souhaitez stocker les conversations, adaptez ici
+      return MessagesService.generateConversationId(userId1, userId2);
+    }
   constructor(
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
     private usersService: UsersService, // Inject UsersService
   ) {}
 
+  /**
+   * Génère un conversationId unique pour un binôme coach-parent (ordre stable)
+   */
+  static generateConversationId(userA: string, userB: string): string {
+    // Trie les deux ids pour garantir l'unicité quel que soit l'ordre
+    return [userA, userB].sort().join('-');
+  }
+
   async createMessage(senderId: string, createMessageDto: CreateMessageDto): Promise<Message> { // senderId is now the first parameter
-    const { receiver, conversationId, type, content, mediaUrl } = createMessageDto;
+    const { receiver, type, content, mediaUrl } = createMessageDto;
 
     // Validate sender and receiver IDs
     if (!Types.ObjectId.isValid(senderId)) throw new BadRequestException('Invalid sender ID');
@@ -25,23 +42,37 @@ export class MessagesService {
     if (!senderUser) throw new NotFoundException('Sender not found');
     if (!receiverUser) throw new NotFoundException('Receiver not found');
 
+    // Générer un conversationId unique pour ce binôme si non fourni
+    const conversationId = MessagesService.generateConversationId(senderId, receiver);
+
     const newMessage = new this.messageModel({
-      sender: new Types.ObjectId(senderId), // Use the provided senderId
+      sender: new Types.ObjectId(senderId),
       receiver: new Types.ObjectId(receiver),
       conversationId,
       type,
-      content: type === 'text' ? content : undefined, // Only set content for text messages
-      mediaUrl: (type === 'image' || type === 'audio') ? mediaUrl : undefined, // Only set mediaUrl for media messages
+      content: type === 'text' ? content : undefined,
+      mediaUrl: (type === 'image' || type === 'audio') ? mediaUrl : undefined,
     });
     return newMessage.save();
   }
 
-  async getConversationMessages(conversationId: string): Promise<Message[]> {
+  async getConversationMessages(conversationId: string, userId: string): Promise<Message[]> {
+    // Validation du format du conversationId
+    const parts = conversationId.split('-');
+    if (parts.length !== 2) {
+      throw new BadRequestException('Invalid conversation ID format');
+    }
+    const [userId1, userId2] = parts;
+    // Vérifie que l'utilisateur courant est bien un participant
+    if (userId !== userId1 && userId !== userId2) {
+      throw new BadRequestException('You are not a participant in this conversation.');
+    }
+    // Récupère les messages
     return this.messageModel
       .find({ conversationId })
-      .populate('sender', 'nom prenom photoProfil') // Populate sender info
-      .populate('receiver', 'nom prenom photoProfil') // Populate receiver info
-      .sort({ createdAt: 1 }) // Sort by oldest first
+      .populate('sender', '_id nom prenom email photoProfil')
+      .populate('receiver', '_id nom prenom email photoProfil')
+      .sort({ createdAt: 1 })
       .exec();
   }
 

@@ -1,11 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { SuiviEnfant, SuiviEnfantDocument } from './suivi-enfant.schema';
-import { CreateSuiviEnfantDto } from './dto/create-suivi-enfant.dto';
-import { UpdateSuiviEnfantDto } from './dto/update-suivi-enfant.dto';
-import { UsersService } from '../users/users.service';
-import { UserRole } from '../users/interfaces/user-role.enum';
+
+  import * as mongoose from 'mongoose';
+
+  import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+  import { InjectModel } from '@nestjs/mongoose';
+  import { Model, Types } from 'mongoose';
+  import { SuiviEnfant, SuiviEnfantDocument } from './suivi-enfant.schema';
+  import { CreateSuiviEnfantDto } from './dto/create-suivi-enfant.dto';
+  import { UpdateSuiviEnfantDto } from './dto/update-suivi-enfant.dto';
+  import { UsersService } from '../users/users.service';
+  import { UserRole } from '../users/interfaces/user-role.enum';
 
 @Injectable()
 export class SuiviEnfantService {
@@ -15,6 +18,128 @@ export class SuiviEnfantService {
     private readonly suiviModel: Model<SuiviEnfantDocument>,
     private readonly usersService: UsersService
   ) {}
+
+    async getAvailableParents(userId: string): Promise<any[]> {
+    try {
+      if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+        throw new BadRequestException('id invalide');
+      }
+      this.logger.log(`🔍 Getting parents for coach: ${userId}`);
+      const suivis = await this.suiviModel.find({
+        $or: [
+          { coach: userId },
+          { coach: new Types.ObjectId(userId) }
+        ]
+      }).populate({
+        path: 'enfant',
+        populate: {
+          path: 'parent',
+          select: '_id nom prenom email role photoProfil'
+        }
+      }).exec();
+      this.logger.log(`📊 Found ${suivis.length} suivis for coach ${userId}`);
+      if (suivis.length === 0) {
+        this.logger.warn('⚠️ No suivis found for this coach');
+        return [];
+      }
+      const parentMap = new Map();
+      for (const suivi of suivis) {
+        // enfant peut être un ObjectId ou un document peuplé
+        const enfant: any = suivi.enfant;
+        let parent = null;
+        if (enfant && typeof enfant === 'object' && 'parent' in enfant) {
+          parent = enfant.parent;
+        }
+        if (parent && typeof parent === 'object' && '_id' in parent) {
+          const parentAny = parent as any;
+          const parentId = parentAny._id.toString();
+          if (!parentMap.has(parentId)) {
+            parentMap.set(parentId, {
+              _id: parentAny._id,
+              nom: parentAny.nom,
+              prenom: parentAny.prenom,
+              email: parentAny.email,
+              role: parentAny.role,
+              photoProfil: parentAny.photoProfil
+            });
+          }
+        }
+      }
+      const parents = Array.from(parentMap.values());
+      this.logger.log(`✅ Returning ${parents.length} unique parents`);
+      return parents;
+    } catch (error) {
+      this.logger.error('❌ Error in getAvailableParents:', error);
+      throw error;
+    }
+    }
+
+    async getAvailableCoaches(userId: string): Promise<any[]> {
+      if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+        throw new BadRequestException('id invalide');
+      }
+      const children = await this.usersService.getChildren(userId);
+      const childIds = children.map(child => child._id);
+      const suivis = await this.suiviModel.find({ enfant: { $in: childIds } }).populate('coach');
+      const coachMap = new Map();
+      suivis.forEach(suivi => {
+        if (suivi.coach && !coachMap.has(suivi.coach._id.toString())) {
+          coachMap.set(suivi.coach._id.toString(), suivi.coach);
+        }
+      });
+      return Array.from(coachMap.values());
+    }
+
+
+  /**
+   * Retourne la liste des parents ayant au moins un enfant suivi par ce coach
+   */
+  async getParentsForCoach(coachId: string): Promise<Array<{ _id: string; nom: string; prenom: string; email: string }>> {
+    // Trouver tous les suivis faits par ce coach
+    const suivis = await this.suiviModel.find({ coach: coachId }).populate({ path: 'enfant', populate: { path: 'parent' } }).exec();
+    const parentMap = new Map<string, { _id: string; nom: string; prenom: string; email: string }>();
+    for (const suivi of suivis) {
+      const enfant: any = suivi.enfant;
+      if (enfant && enfant.parent && enfant.parent._id) {
+        const parent = enfant.parent;
+        if (!parentMap.has(parent._id.toString())) {
+          parentMap.set(parent._id.toString(), {
+            _id: parent._id.toString(),
+            nom: parent.nom,
+            prenom: parent.prenom,
+            email: parent.email,
+          });
+        }
+      }
+    }
+    return Array.from(parentMap.values());
+  }
+
+  /**
+   * Retourne la liste des coachs ayant fait un suivi pour au moins un enfant de ce parent
+   */
+  async getCoachesForParent(parentId: string): Promise<Array<{ _id: string; nom: string; prenom: string; email: string }>> {
+    // Récupérer les enfants du parent
+    const enfants = await this.usersService.getChildren(parentId);
+    const enfantIds = enfants.map(e => e._id);
+    // Trouver tous les suivis pour ces enfants
+    const suivis = await this.suiviModel.find({ enfant: { $in: enfantIds } }).populate('coach').exec();
+    const coachMap = new Map<string, { _id: string; nom: string; prenom: string; email: string }>();
+    for (const suivi of suivis) {
+      const coach: any = suivi.coach;
+      if (coach && coach._id) {
+        if (!coachMap.has(coach._id.toString())) {
+          coachMap.set(coach._id.toString(), {
+            _id: coach._id.toString(),
+            nom: coach.nom,
+            prenom: coach.prenom,
+            email: coach.email,
+          });
+        }
+      }
+    }
+    return Array.from(coachMap.values());
+  }
 
   async create(dto: CreateSuiviEnfantDto, currentUser: { userId: string; role: UserRole }): Promise<SuiviEnfant> {
     if (!currentUser || currentUser.role !== UserRole.COACH) {

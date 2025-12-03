@@ -75,7 +75,10 @@ export class MessagesGateway {
 
     try {
       const message = await this.messagesService.createMessage(senderId, payload);
-      this.server.to(payload.conversationId).emit('receiveMessage', message); // Emit to all in conversation
+      // Émettre à tous les membres de la conversation (y compris l'expéditeur si abonné)
+      this.server.to(payload.conversationId).emit('receiveMessage', message);
+      // Émettre aussi directement à l'expéditeur pour garantir l'affichage instantané
+      client.emit('receiveMessage', message);
     } catch (error) {
       console.error('Error sending message via WebSocket:', error.message);
       client.emit('error', 'Failed to send message.');
