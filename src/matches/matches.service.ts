@@ -91,6 +91,24 @@ export class MatchesService {
       // Phase 3 : 1 match FINALE qui attend le vainqueur de la demi-finale
       const finale = await this.createMatchForPhase(tournoiId, [], MatchPhase.FINALE, 1);
       matches.push(finale);
+    } else if (numEquipes === 6) {
+      // Format pour 6 équipes : 2 quarts de finale + 2 demi-finales + 1 finale
+      const equipesQuarts = equipes.slice(2, 6); // Équipes 3-6 jouent les quarts
+      const equipesBye = equipes.slice(0, 2);    // Équipes 1-2 ont un bye direct en demies
+
+      // Quarts de finale : Équipe 3 vs Équipe 6, Équipe 4 vs Équipe 5
+      const quart1 = await this.createMatchForPhase(tournoiId, [equipesQuarts[0], equipesQuarts[3]], MatchPhase.QUART_FINAL, 1);
+      const quart2 = await this.createMatchForPhase(tournoiId, [equipesQuarts[1], equipesQuarts[2]], MatchPhase.QUART_FINAL, 2);
+      matches.push(quart1, quart2);
+
+      // Demi-finales : Équipe 1 vs Gagnant Q2, Équipe 2 vs Gagnant Q1
+      const demi1 = await this.createMatchForPhase(tournoiId, [], MatchPhase.DEMI_FINAL, 1);
+      const demi2 = await this.createMatchForPhase(tournoiId, [], MatchPhase.DEMI_FINAL, 2);
+      matches.push(demi1, demi2);
+
+      // Finale
+      const finale = await this.createMatchForPhase(tournoiId, [], MatchPhase.FINALE, 1);
+      matches.push(finale);
     } else if (numEquipes >= 8) {
       const numQuarts = Math.min(8, numEquipes);
       const equipesQuarts = equipes.slice(0, numQuarts);
@@ -114,7 +132,7 @@ export class MatchesService {
       const finale = await this.createMatchForPhase(tournoiId, [], MatchPhase.FINALE, 1);
       matches.push(finale);
     } else {
-      throw new BadRequestException('Le nombre d\'équipes doit être 2, 4, ou un multiple de 8 pour générer un arbre standard');
+      throw new BadRequestException('Le nombre d\'équipes doit être 2, 4, 6, 8, 16 ou 32');
     }
 
     this.logger.log(`Arbre généré pour le tournoi ${tournoiId} avec ${matches.length} matchs`);
@@ -307,9 +325,3 @@ export class MatchesService {
     }
   }
 }
-
-
-
-
-
-
