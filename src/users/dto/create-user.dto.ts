@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength, IsArray, IsNumber, IsDateString, IsObject } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength, IsArray, IsNumber, IsDateString, IsObject, IsMongoId } from 'class-validator';
 import { UserRole } from '../interfaces/user-role.enum';
 import { IsRegisterRole } from '../../common/validators/register-role.validator';
 

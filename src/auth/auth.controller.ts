@@ -24,7 +24,33 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Inscription d\'un nouvel utilisateur' })
-  @ApiBody({ type: CreateUserDto })
+  @ApiBody({
+    type: CreateUserDto,
+    examples: {
+      parentRegistration: {
+        summary: 'Register as a parent',
+        value: {
+          nom: 'Durand',
+          prenom: 'Luc',
+          email: 'parent@example.com',
+          motDePasse: 'parentpass',
+          role: 'parent'
+        }
+      },
+      coachRegistration: {
+        summary: 'Register as a coach',
+        value: {
+          nom: 'Martin',
+          prenom: 'Claire',
+          email: 'coach@example.com',
+          motDePasse: 'coachpass',
+          role: 'coach',
+          specialite: 'Football',
+          certification: ['Certification FIFA']
+        }
+      }
+    }
+  })
   @ApiResponse({
     status: 201,
     description: 'Utilisateur créé avec succès. Un code de vérification a été envoyé par email.',
@@ -69,7 +95,19 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Connexion d\'un utilisateur' })
-  @ApiBody({ type: LoginUserDto })
+  @ApiBody({
+    type: LoginUserDto,
+    examples: {
+      parentLogin: {
+        summary: 'Parent login',
+        value: { email: 'parent@example.com', motDePasse: 'parentpass' }
+      },
+      coachLogin: {
+        summary: 'Coach login',
+        value: { email: 'coach@example.com', motDePasse: 'coachpass' }
+      }
+    }
+  })
   @ApiResponse({
     status: 200,
     description: 'Connexion réussie',

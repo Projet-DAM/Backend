@@ -1,3 +1,4 @@
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { Injectable, Logger, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -31,6 +32,7 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
+
 
     const payload: JwtPayload = {
       sub: user._id.toString(),

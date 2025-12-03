@@ -33,6 +33,9 @@ export class User {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   parent?: Types.ObjectId;
 
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  coach?: Types.ObjectId[];
+
   // Attributs spécifiques au Coach
   @Prop({ type: [String] })
   certification?: string[];
