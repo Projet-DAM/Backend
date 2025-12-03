@@ -6,6 +6,8 @@ import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './entity/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CreateChildDto } from './dto/create-child.dto';
+import { UserRole } from './interfaces/user-role.enum';
 
 @Injectable()
 export class UsersService {
@@ -57,14 +59,17 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
-    // Vérifier si l'email existe déjà
-    const existingUser = await this.userModel.findOne({ email: createUserDto.email });
-    if (existingUser) {
-      throw new ConflictException('Cet email est déjà utilisé');
+    // Vérifier si l'email existe déjà (sauf pour les enfants avec email temporaire)
+    if (createUserDto.email && !createUserDto.email.includes('@temp.com')) {
+      const existingUser = await this.userModel.findOne({ email: createUserDto.email });
+      if (existingUser) {
+        throw new ConflictException('Cet email est déjà utilisé');
+      }
     }
 
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(createUserDto.motDePasse, 10);
+    // Hasher le mot de passe (ou générer un mot de passe temporaire pour les enfants)
+    const passwordToHash = createUserDto.motDePasse || 'temp123';
+    const hashedPassword = await bcrypt.hash(passwordToHash, 10);
 
     // Validation logique selon le rôle
     const userData: any = {
@@ -88,6 +93,20 @@ export class UsersService {
       delete userData.adresse;
       delete userData.description;
       delete userData.horaires;
+      
+      // Gérer le parentId si fourni
+      if (createUserDto.parentId) {
+        const parent = await this.userModel.findById(createUserDto.parentId);
+        if (!parent) {
+          throw new NotFoundException('Parent non trouvé');
+        }
+        if (parent.role !== UserRole.PARENT) {
+          throw new BadRequestException('L\'utilisateur spécifié comme parent doit avoir le rôle parent');
+        }
+        // Convertir parentId (string) en ObjectId
+        userData.parent = new Types.ObjectId(createUserDto.parentId);
+        delete userData.parentId; // Supprimer parentId car on utilise parent (ObjectId)
+      }
     } else if (createUserDto.role === UserRole.PARENT) {
       // Un parent peut avoir des enfants, mais ne peut pas avoir d'attribut parent
       delete userData.parent;
@@ -130,7 +149,23 @@ export class UsersService {
     }
 
     const user = new this.userModel(userData);
-    return user.save();
+    const savedUser = await user.save();
+
+    // Si c'est un enfant avec un parent, ajouter l'enfant à la liste des enfants du parent
+    if (createUserDto.role === UserRole.ENFANT && savedUser.parent) {
+      const parent = await this.userModel.findById(savedUser.parent);
+      if (parent) {
+        if (!parent.enfants) {
+          parent.enfants = [];
+        }
+        if (!parent.enfants.some((id: any) => id.toString() === savedUser._id.toString())) {
+          parent.enfants.push(savedUser._id);
+          await parent.save();
+        }
+      }
+    }
+
+    return savedUser;
   }
 
   async findAll(role?: UserRole): Promise<UserDocument[]> {
@@ -141,6 +176,36 @@ export class UsersService {
       .populate('parent')
       .populate('coach')
       .exec();
+  async findAll(filters?: { role?: UserRole; parentId?: string }): Promise<UserDocument[]> {
+    const query: any = {};
+    
+    if (filters?.role) {
+      query.role = filters.role;
+    }
+    
+    if (filters?.parentId) {
+      // Convertir parentId (string) en ObjectId pour la requête MongoDB
+      try {
+        query.parent = new Types.ObjectId(filters.parentId);
+        console.log(`[UsersService] findAll - Filtrage par parentId: ${filters.parentId} (ObjectId: ${query.parent})`);
+      } catch (error) {
+        console.error(`[UsersService] Erreur lors de la conversion du parentId en ObjectId: ${error}`);
+        throw new BadRequestException(`ID parent invalide: ${filters.parentId}`);
+      }
+    }
+    
+    console.log(`[UsersService] findAll - Query:`, JSON.stringify(query));
+    const users = await this.userModel.find(query).populate('enfants').populate('parent').exec();
+    console.log(`[UsersService] findAll - Résultat: ${users.length} utilisateur(s) trouvé(s)`);
+    if (filters?.role === UserRole.ENFANT && users.length > 0) {
+      console.log(`[UsersService] Détails des enfants:`, users.map(u => ({ 
+        id: u._id?.toString(), 
+        nom: u.nom, 
+        prenom: u.prenom, 
+        parent: u.parent?.toString() || u.parent 
+      })));
+    }
+    return users;
   }
 
   async findById(id: string): Promise<UserDocument | null> {
@@ -301,8 +366,23 @@ export class UsersService {
     }
     const result = await this.userModel.findByIdAndDelete(cleanId);
     if (!result) {
+    const user = await this.userModel.findById(id);
+    if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
+
+    // Si c'est un enfant, le retirer de la liste des enfants du parent
+    if (user.role === UserRole.ENFANT && user.parent) {
+      const parent = await this.userModel.findById(user.parent);
+      if (parent && parent.enfants) {
+        parent.enfants = parent.enfants.filter(
+          (childId: any) => childId.toString() !== id
+        );
+        await parent.save();
+      }
+    }
+
+    await this.userModel.findByIdAndDelete(id);
   }
 
   async linkChild(parentId: string, childId: string): Promise<UserDocument> {
@@ -456,6 +536,101 @@ export class UsersService {
   // Récupérer les enfants d'un coach (utilisé par les coaches pour sélectionner un enfant)
   async getChildrenOfCoach(coachId: string): Promise<UserDocument[]> {
     return this.userModel.find({ coach: coachId, role: UserRole.ENFANT }).exec();
+  }
+
+  async updateVerificationCode(userId: string, code: string, expiresAt: Date): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      verificationCode: code,
+      verificationCodeExpires: expiresAt,
+    });
+  }
+
+  async markEmailAsVerified(userId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      emailVerified: true,
+      verificationCode: undefined,
+      verificationCodeExpires: undefined,
+    });
+  async createChild(parentId: string, createChildDto: CreateChildDto): Promise<UserDocument> {
+    const parent = await this.userModel.findById(parentId);
+    if (!parent) {
+      throw new NotFoundException('Parent non trouvé');
+    }
+
+    if (parent.role !== UserRole.PARENT) {
+      throw new BadRequestException('L\'utilisateur doit être un parent');
+    }
+
+    // Créer l'enfant avec le rôle ENFANT
+    const childData: any = {
+      prenom: createChildDto.prenom,
+      nom: createChildDto.nom,
+      dateNaissance: new Date(createChildDto.dateNaissance),
+      sportPratique: createChildDto.sportPratique,
+      role: UserRole.ENFANT,
+      parent: parent._id,
+    };
+
+    // Ajouter la photo de profil si fournie
+    if (createChildDto.photoProfil) {
+      childData.photoProfil = createChildDto.photoProfil;
+    }
+
+    // Les enfants n'ont pas d'email ni motDePasse
+    // Générer un email unique basé sur le parent et un timestamp
+    const timestamp = Date.now();
+    childData.email = `enfant_${parent._id}_${timestamp}@academie.local`;
+    
+    // Générer un mot de passe temporaire (les enfants ne se connectent pas)
+    childData.motDePasse = await bcrypt.hash(`temp_${timestamp}`, 10);
+
+    const child = new this.userModel(childData);
+    await child.save();
+
+    // Ajouter l'enfant à la liste des enfants du parent
+    if (!parent.enfants) {
+      parent.enfants = [];
+    }
+    parent.enfants.push(child._id);
+    await parent.save();
+
+    const updatedParent = await this.userModel.findById(parentId).populate('enfants').populate('parent').exec();
+    if (!updatedParent) {
+      throw new NotFoundException('Parent non trouvé après mise à jour');
+    }
+    return updatedParent;
+  }
+
+  async getChildData(parentId: string, childId: string): Promise<UserDocument> {
+    const parent = await this.userModel.findById(parentId);
+    if (!parent) {
+      throw new NotFoundException('Parent non trouvé');
+    }
+
+    if (parent.role !== UserRole.PARENT) {
+      throw new BadRequestException('L\'utilisateur doit être un parent');
+    }
+
+    const child = await this.userModel.findById(childId);
+    if (!child) {
+      throw new NotFoundException('Enfant non trouvé');
+    }
+
+    if (child.role !== UserRole.ENFANT) {
+      throw new BadRequestException('L\'utilisateur doit être un enfant');
+    }
+
+    // Vérifier que l'enfant appartient bien au parent
+    if (!child.parent || child.parent.toString() !== parentId) {
+      throw new BadRequestException('Cet enfant n\'appartient pas à ce parent');
+    }
+
+    // Vérifier que l'enfant est dans la liste des enfants du parent
+    if (!parent.enfants || !parent.enfants.some(id => id.toString() === childId)) {
+      throw new BadRequestException('Cet enfant n\'appartient pas à ce parent');
+    }
+
+    return child;
   }
 }
 

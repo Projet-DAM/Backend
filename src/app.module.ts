@@ -9,6 +9,15 @@ import { SuiviEnfantModule } from './suivi-enfant/suivi-enfant.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { MessagesModule } from './messages/messages.module';
 
+import { OffersModule } from './offers/offers.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { PaymentsModule } from './payments/payments.module';
+import { TournoiModule } from './tournoi/tournoi.module';
+import { InscriptionModule } from './inscriptions/inscription.module';
+import { EquipeModule } from './equipes/equipe.module';
+import { MatchesModule } from './matches/matches.module';
+import { FirebaseModule } from './firebase/firebase.module';
+import { NotificationModule } from './notifications/notification.module';
 
 @Module({
   imports: [
@@ -22,6 +31,15 @@ import { MessagesModule } from './messages/messages.module';
     SuiviEnfantModule,
     UploadsModule,
     MessagesModule,
+    OffersModule,
+    SubscriptionsModule,
+    PaymentsModule,
+    TournoiModule,
+    InscriptionModule,
+    EquipeModule,
+    MatchesModule,
+    FirebaseModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -3,5 +3,6 @@ export enum UserRole {
   ENFANT = 'enfant',
   COACH = 'coach',
   ACADEMIE = 'academie',
+  ADMIN = 'admin',
 }
 

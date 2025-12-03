@@ -1,4 +1,6 @@
+import { NestFactory } from '@nestjs/core';
 import { NestFactory, Reflector } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -8,15 +10,15 @@ import { existsSync, mkdirSync } from 'fs';
 import { WsAdapter } from '@nestjs/platform-ws'; // Import WsAdapter
 import { join } from 'path';
 import * as express from 'express';
+import { join } from 'path';
 
 dotenv.config();
 
 async function bootstrap() {
-  // Créer le dossier uploads s'il n'existe pas
   const uploadsDir = './uploads';
-  if (!existsSync(uploadsDir)) {
-    mkdirSync(uploadsDir, { recursive: true });
-  }
+  if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
+  const tournoisUploadsDir = './uploads/tournois';
+  if (!existsSync(tournoisUploadsDir)) mkdirSync(tournoisUploadsDir, { recursive: true });
 
   // Find a free port first to avoid partial app startup logs followed by EADDRINUSE
   const net = await import('net');
@@ -45,8 +47,19 @@ async function bootstrap() {
   const selectedPort = await findFreePort(defaultPort, maxProbePort);
 
   const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Validation globale
+  // Servir les fichiers statiques
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads/',
+  });
+
+  // Guard global
+  const jwtAuthGuard = app.get(JwtAuthGuard);
+  app.useGlobalGuards(jwtAuthGuard);
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new JwtAuthGuard(reflector));
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -61,8 +74,8 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
+  app.enableCors();
 
-  // Configuration Swagger
   const config = new DocumentBuilder()
     .setTitle('SportyConnect Kids API')
     .setDescription('API REST pour la gestion des utilisateurs et authentification JWT')
@@ -82,6 +95,10 @@ async function bootstrap() {
     .addTag('Auth', 'Endpoints d\'authentification')
     .addTag('Users', 'Gestion des utilisateurs')
     .addTag('SuiviEnfant', 'Suivi des enfants')
+    .addTag('App', 'Endpoints généraux de l\'API')
+    .addTag('Auth', 'Endpoints d\'authentification')
+    .addTag('Users', 'Gestion des utilisateurs')
+    .addTag('Tournois', 'Gestion des tournois')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
