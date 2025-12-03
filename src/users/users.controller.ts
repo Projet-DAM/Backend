@@ -26,10 +26,17 @@ import {
   ApiBody,
   ApiParam,
   ApiQuery,
+  ApiBadRequestResponse,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserResponseDto } from './dto/user-response.dto';
+import { LinkChildDto } from './dto/link-child.dto';
+import { CreateChildDto } from './dto/create-child.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from './interfaces/user-role.enum';
 import { diskStorage } from 'multer';
@@ -124,6 +131,57 @@ export class UsersController {
 
     const user = await this.usersService.create(createUserDto);
     return this.transformUserForResponse(user);
+  @Roles(UserRole.ACADEMIE)
+  @ApiOperation({ summary: 'Créer un nouvel utilisateur (Académie uniquement)' })
+  @ApiBody({ type: CreateUserDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Utilisateur créé avec succès',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'Données invalides',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['email must be an email', 'motDePasse must be longer than or equal to 6 characters'],
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Académie requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 409, 
+    description: 'Email déjà utilisé',
+    schema: {
+      example: {
+        statusCode: 409,
+        message: 'Cet email est déjà utilisé',
+        error: 'Conflict'
+      }
+    }
+  })
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.create(createUserDto);
   }
 
   @Get()
@@ -186,6 +244,33 @@ export class UsersController {
       console.log(`[UsersController] Enfants trouvés:`, users.map(u => ({ id: u._id, nom: u.nom, prenom: u.prenom, parent: u.parent })));
     }
     return this.transformUsersForResponse(users);
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Liste des utilisateurs',
+    type: [UserResponseDto]
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Académie requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  findAll(@Query('role') role?: UserRole) {
+    return this.usersService.findAll(role);
   }
 
   @Get(':id')
@@ -236,6 +321,44 @@ export class UsersController {
     }
 
     return this.transformUserForResponse(user);
+  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Utilisateur trouvé',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'ID invalide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'ID invalide',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Utilisateur non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Utilisateur non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  findOne(@Param('id') id: string) {
+    return this.usersService.findById(id);
   }
 
   @Patch(':id')
@@ -364,21 +487,143 @@ export class UsersController {
       }
     }
 
+  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
+  @ApiBody({ type: UpdateUserDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Utilisateur mis à jour',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'Données invalides',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['email must be an email'],
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Utilisateur non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Utilisateur non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(id, updateUserDto);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ACADEMIE)
+  @ApiOperation({ summary: 'Supprimer un utilisateur (Académie uniquement)' })
+  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Utilisateur supprimé',
+    schema: {
+      example: {
+        message: 'Utilisateur supprimé avec succès'
+      }
+    }
+  })
+  @ApiBadRequestResponse({ 
+    description: 'ID invalide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'ID invalide',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Académie requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Utilisateur non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Utilisateur non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  remove(@Param('id') id: string) {
     return this.usersService.remove(id);
   }
 
   @Post(':id/link-child')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Lier un enfant à un parent' })
-  @ApiParam({ name: 'id', description: 'ID du parent' })
-  @ApiBody({
+  @ApiParam({ name: 'id', description: 'ID du parent (MongoDB ObjectId)' })
+  @ApiBody({ type: LinkChildDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Enfant lié avec succès',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'Erreur de validation ou ID invalide',
     schema: {
-      type: 'object',
-      properties: {
-        childId: { type: 'string', example: '507f1f77bcf86cd799439011' },
-      },
-      required: ['childId'],
-    },
+      example: {
+        statusCode: 400,
+        message: 'childId doit être un ID MongoDB valide',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Parent requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
   })
   @ApiResponse({ status: 200, description: 'Enfant lié avec succès' })
   @ApiResponse({ status: 404, description: 'Parent ou enfant non trouvé' })
@@ -390,6 +635,72 @@ export class UsersController {
       throw new ForbiddenException('Seuls les parents peuvent lier des enfants');
     }
     return this.usersService.linkChild(id, childId);
+  @ApiNotFoundResponse({ 
+    description: 'Parent ou enfant non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Parent ou enfant non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  linkChild(@Param('id') id: string, @Body() linkChildDto: LinkChildDto) {
+    return this.usersService.linkChild(id, linkChildDto.childId);
+  }
+
+  @Get(':parentId/children/:childId')
+  @Roles(UserRole.PARENT)
+  @ApiOperation({ summary: 'Récupérer un enfant spécifique avec vérification d\'appartenance' })
+  @ApiParam({ name: 'parentId', description: 'ID du parent (MongoDB ObjectId)' })
+  @ApiParam({ name: 'childId', description: 'ID de l\'enfant (MongoDB ObjectId)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Enfant trouvé',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'ID invalide ou enfant n\'appartient pas au parent',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Cet enfant n\'appartient pas à ce parent',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Parent requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Parent ou enfant non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Parent ou enfant non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  getChildData(@Param('parentId') parentId: string, @Param('childId') childId: string) {
+    return this.usersService.getChildData(parentId, childId);
   }
 
   @Get(':id/children')
@@ -410,6 +721,108 @@ export class UsersController {
     // Les coaches et academies peuvent voir tous les enfants
     const children = await this.usersService.getChildren(id);
     return this.transformUsersForResponse(children);
+  @ApiParam({ name: 'id', description: 'ID du parent (MongoDB ObjectId)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Liste des enfants',
+    type: [UserResponseDto]
+  })
+  @ApiBadRequestResponse({ 
+    description: 'ID invalide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'ID invalide',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Parent requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Parent non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Parent non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  getChildren(@Param('id') id: string) {
+    return this.usersService.getChildren(id);
+  }
+
+  @Post(':id/children')
+  @Roles(UserRole.PARENT)
+  @ApiOperation({ summary: 'Créer un nouvel enfant pour un parent' })
+  @ApiParam({ name: 'id', description: 'ID du parent (MongoDB ObjectId)' })
+  @ApiBody({ type: CreateChildDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Enfant créé avec succès',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'Erreur de validation ou ID invalide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['prenom must be a string', 'sportPratique must be a valid enum value'],
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({ 
+    description: 'Accès refusé : rôle insuffisant (Parent requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Parent non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Parent non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  createChild(@Param('id') id: string, @Body() createChildDto: CreateChildDto) {
+    return this.usersService.createChild(id, createChildDto);
   }
 
   @Post(':id/upload-photo')
@@ -433,12 +846,48 @@ export class UsersController {
         photo: {
           type: 'string',
           format: 'binary',
+          description: 'Fichier image (JPG, PNG, GIF, max 20MB)',
         },
       },
+      required: ['photo'],
     },
   })
-  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur' })
-  @ApiResponse({ status: 200, description: 'Photo uploadée avec succès' })
+  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Photo uploadée avec succès',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({ 
+    description: 'Fichier invalide, format non supporté, ou taille trop grande',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Le fichier doit être une image (JPG, PNG, GIF) et ne doit pas dépasser 20MB',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({ 
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiNotFoundResponse({ 
+    description: 'Utilisateur non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Utilisateur non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
   async uploadPhoto(
     @Param('id') id: string,
     @UploadedFile(

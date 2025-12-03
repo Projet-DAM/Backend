@@ -54,6 +54,30 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         throw error;
       }
       throw new UnauthorizedException(`Erreur d'authentification: ${error.message}`);
+        throw new UnauthorizedException('Token invalide ou expiré');
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Token invalide ou expiré');
+    }
+
+    if (!requiredRoles) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur non authentifié');
+    }
+
+    const hasRole = requiredRoles.some((role) => user.role === role);
+    
+    if (!hasRole) {
+      throw new ForbiddenException('Accès refusé : rôle insuffisant');
     }
 
     return true;
