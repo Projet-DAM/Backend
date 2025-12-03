@@ -47,6 +47,8 @@ export class User {
   @Prop()
   dateNaissance?: Date;
 
+  @Prop({ enum: ['M', 'F'] })
+  sexe?: string;
   @Prop({ enum: SportType })
   sportPratique?: SportType;
 
@@ -67,6 +69,16 @@ export class User {
       fin: string;
     };
   };
+
+  // Champs pour la vérification d'email
+  @Prop()
+  verificationCode?: string;
+
+  @Prop({ type: Date })
+  verificationCodeExpires?: Date;
+
+  @Prop({ default: false })
+  emailVerified?: boolean;
 
   createdAt?: Date;
   updatedAt?: Date;

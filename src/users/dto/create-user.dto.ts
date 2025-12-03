@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength, IsArray, IsNumber, IsDateString, IsObject } from 'class-validator';
 import { UserRole } from '../interfaces/user-role.enum';
+import { IsRegisterRole } from '../../common/validators/register-role.validator';
 
 export class CreateUserDto {
   @ApiProperty({ 
@@ -21,6 +22,16 @@ export class CreateUserDto {
   @IsString()
   prenom: string;
 
+  @ApiProperty({ example: 'jean.dupont@example.com', description: 'Adresse email (optionnel pour les enfants)' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiProperty({ example: 'password123', description: 'Mot de passe (minimum 6 caractères, optionnel pour les enfants)', minLength: 6 })
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  motDePasse?: string;
   @ApiProperty({ 
     example: 'jean.dupont@example.com', 
     description: 'Adresse email',
@@ -105,6 +116,25 @@ export class CreateUserDto {
   @IsOptional()
   @IsDateString({}, { message: 'La date de naissance doit être au format YYYY-MM-DD' })
   dateNaissance?: string;
+
+  @ApiProperty({ 
+    example: 'M', 
+    description: 'Sexe de l\'enfant (M ou F)',
+    required: false,
+    enum: ['M', 'F']
+  })
+  @IsOptional()
+  @IsEnum(['M', 'F'])
+  sexe?: string;
+
+  @ApiProperty({ 
+    example: '507f1f77bcf86cd799439011', 
+    description: 'ID du parent (automatiquement défini si créé par un parent)',
+    required: false
+  })
+  @IsOptional()
+  @IsString()
+  parentId?: string;
 
   // Attributs spécifiques à l'Académie
   @ApiProperty({ 

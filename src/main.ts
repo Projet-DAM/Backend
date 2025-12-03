@@ -1,3 +1,4 @@
+import { NestFactory } from '@nestjs/core';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
@@ -23,6 +24,9 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
+  // Guard global
+  const jwtAuthGuard = app.get(JwtAuthGuard);
+  app.useGlobalGuards(jwtAuthGuard);
   const reflector = app.get(Reflector);
   app.useGlobalGuards(new JwtAuthGuard(reflector));
 
