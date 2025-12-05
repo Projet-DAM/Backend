@@ -18,6 +18,9 @@ import { EquipeModule } from './equipes/equipe.module';
 import { MatchesModule } from './matches/matches.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { NotificationModule } from './notifications/notification.module';
+import { CallsModule } from './calls/calls.module';
+import { DiagnosticsModule } from './diagnostics/diagnostics.module';
+import { TestModule } from './test/test.module';
 
 @Module({
   imports: [
@@ -40,6 +43,9 @@ import { NotificationModule } from './notifications/notification.module';
     MatchesModule,
     FirebaseModule,
     NotificationModule,
+    CallsModule,
+    DiagnosticsModule,
+    TestModule,
   ],
   controllers: [AppController],
   providers: [AppService],

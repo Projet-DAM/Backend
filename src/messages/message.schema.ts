@@ -30,6 +30,28 @@ export class Message {
 
   @Prop({ type: Boolean, default: false })
   read: boolean;
+
+  // Deletion logic
+  @Prop({ type: Boolean, default: false })
+  isDeletedForAll: boolean;
+
+  @Prop({ type: [Types.ObjectId], default: [] })
+  deletedFor: Types.ObjectId[];
+
+  // Edit logic
+  @Prop({ type: Boolean, default: false })
+  edited: boolean;
+
+  @Prop({ type: Date })
+  editedAt?: Date;
+
+  // Reactions: one emoji per user
+  @Prop({ type: Map, of: String, default: {} })
+  reactions: Map<string, string>;
+
+  // Reply to specific message
+  @Prop({ type: Types.ObjectId, ref: 'Message' })
+  replyToMessageId?: Types.ObjectId;
 }
 
 export type MessageDocument = Message & Document;

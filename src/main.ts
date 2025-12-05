@@ -6,17 +6,28 @@ import { AppModule } from './app.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import * as dotenv from 'dotenv';
 import { existsSync, mkdirSync } from 'fs';
-import { WsAdapter } from '@nestjs/platform-ws'; // Import WsAdapter
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import * as express from 'express';
 import { join } from 'path';
 
 dotenv.config();
 
 async function bootstrap() {
-  const uploadsDir = './uploads';
-  if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
-  const tournoisUploadsDir = './uploads/tournois';
-  if (!existsSync(tournoisUploadsDir)) mkdirSync(tournoisUploadsDir, { recursive: true });
+  // Ensure all upload directories exist
+  const uploadDirs = [
+    './uploads',
+    './uploads/messages',
+    './uploads/messages/images',
+    './uploads/messages/audio',
+    './uploads/tournois',
+  ];
+  
+  uploadDirs.forEach(dir => {
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+      console.log(`Created directory: ${dir}`);
+    }
+  });
 
   // Find a free port first to avoid partial app startup logs followed by EADDRINUSE
   const net = await import('net');
@@ -46,8 +57,16 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Servir les fichiers statiques
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+  // Request logging middleware (before other middleware)
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
+
+  // Servir les fichiers statiques - MUST be before global guards
+  const uploadsPath = join(__dirname, '..', 'uploads');
+  console.log(`Serving static files from: ${uploadsPath}`);
+  app.useStaticAssets(uploadsPath, {
     prefix: '/uploads/',
   });
 
@@ -59,11 +78,12 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
+  // CORS - Allow all origins for development
   app.enableCors({
-    origin: '*', // Adjust this to your specific frontend URL in production
+    origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   const config = new DocumentBuilder()
@@ -90,21 +110,49 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  // Enable WebSocket adapter
-  app.useWebSocketAdapter(new WsAdapter(app)); // Add this line
-
-  // Serve uploads statically at /uploads
-  const uploadsPath = join(__dirname, '..', 'uploads');
-  app.use('/uploads', express.static(uploadsPath));
+  // Enable Socket.IO adapter (matches MessagesGateway using socket.io)
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // Guard global (après configuration Swagger pour ne pas bloquer /api et /api-json)
+  // IMPORTANT: This is AFTER static file serving so /uploads/* is publicly accessible
   const reflector = app.get(Reflector);
   app.useGlobalGuards(new JwtAuthGuard(reflector));
 
-  // Listen on selected free port
-  await app.listen(selectedPort);
-  console.log(`Application is running on: http://localhost:${selectedPort}`);
-  console.log(`Swagger documentation: http://localhost:${selectedPort}/api`);
+  // Listen on ALL network interfaces (0.0.0.0) so external devices can connect
+  await app.listen(selectedPort, '0.0.0.0');
+  
+  // Get and display all network addresses for easy access
+  const os = require('os');
+  const networkInterfaces = os.networkInterfaces();
+  const addresses: string[] = [];
+  
+  Object.keys(networkInterfaces).forEach(interfaceName => {
+    networkInterfaces[interfaceName].forEach((iface: any) => {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        addresses.push(iface.address);
+      }
+    });
+  });
+  
+  console.log('\n========================================');
+  console.log('🚀 Backend Server Started Successfully!');
+  console.log('========================================');
+  console.log(`📍 Listening on port: ${selectedPort}`);
+  console.log(`📂 Serving uploads from: ${uploadsPath}`);
+  console.log('\n🌐 Access the server from:');
+  console.log(`   Local:    http://localhost:${selectedPort}`);
+  addresses.forEach(addr => {
+    console.log(`   Network:  http://${addr}:${selectedPort}`);
+  });
+  console.log('\n📱 For Android app, use one of the Network URLs above');
+  console.log(`📖 Swagger API docs: http://localhost:${selectedPort}/api`);
+  console.log(`🔍 Network info: http://localhost:${selectedPort}/diagnostics/network/info`);
+  console.log(`🖼️  Test image access: http://localhost:${selectedPort}/test-image`);
+  console.log('========================================\n');
+  
+  console.log('⚠️  IMPORTANT: Ensure Windows Firewall allows port', selectedPort);
+  console.log('   Run as Admin: New-NetFirewallRule -DisplayName "Node Dev" -Direction Inbound -Action Allow -Protocol TCP -LocalPort', selectedPort);
+  console.log('========================================\n');
 }
 
 bootstrap();
