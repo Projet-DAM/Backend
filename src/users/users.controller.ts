@@ -22,7 +22,6 @@ import {
   UnsupportedMediaTypeException,
   HttpCode,
   HttpStatus,
-  Request,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -43,15 +42,13 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UserResponseDto } from './dto/user-response.dto';
-import { LinkChildDto } from './dto/link-child.dto';
 import { CreateChildDto } from './dto/create-child.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from './interfaces/user-role.enum';
 import { Roles } from '../common/decorators/roles.decorator';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import { randomUUID } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import { ImageFileValidator } from './validators/image-file.validator';
 
@@ -59,7 +56,80 @@ import { ImageFileValidator } from './validators/image-file.validator';
 @Controller('users')
 @ApiBearerAuth('JWT-auth')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
+
+  private readonly logger = new Logger(UsersController.name);
+
+  @Post(':id/children')
+  @Roles(UserRole.PARENT)
+  @ApiOperation({ summary: 'Créer un enfant et le lier au parent (PARENT uniquement)' })
+  @ApiParam({ name: 'id', description: 'ID du parent' })
+  @ApiBody({
+    type: CreateChildDto,
+    examples: {
+      simpleChild: {
+        summary: 'Create a child (minimal)',
+        value: {
+          nom: 'Petit',
+          prenom: 'Paul',
+          dateNaissance: '2014-05-10'
+        }
+      },
+      withPhoto: {
+        summary: 'Create a child with photo',
+        value: {
+          nom: 'Petit',
+          prenom: 'Paul',
+          dateNaissance: '2014-05-10',
+          photoProfil: 'https://example.com/paul.jpg'
+        }
+      }
+    }
+  })
+  @UseGuards(JwtAuthGuard)
+  async createChild(@Param('id') id: string, @Body() createChildDto: CreateChildDto, @Req() req: any) {
+    // If authenticated, prefer the token's userId as the parent
+    const tokenUserId = req?.user?.userId;
+    if (!req || !req.user || !tokenUserId) {
+      throw new UnauthorizedException({ message: 'Token manquant ou invalide' });
+    }
+
+    // sanitize and validate provided id
+    const raw = id || '';
+    const decoded = decodeURIComponent(raw).trim();
+    if (!decoded) {
+      throw new BadRequestException({ message: 'parentId manquant' });
+    }
+    if (!Types.ObjectId.isValid(decoded)) {
+      throw new BadRequestException({ message: 'parentId invalide' });
+    }
+
+    // Ensure the caller has permission to create for this parent. If the caller is a parent,
+    // they may only create children for themselves (tokenUserId must match path id).
+    const callerRole = req.user.role;
+    if (callerRole === UserRole.PARENT && tokenUserId !== decoded) {
+      throw new ForbiddenException({ message: 'Un parent ne peut créer un enfant que pour lui-même' });
+    }
+
+    return this.usersService.createChildForParent(decoded, createChildDto);
+  }
+
+
+  @Post('children')
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.PARENT)
+  @ApiOperation({ summary: 'Créer un enfant pour le parent authentifié (utilise le token JWT)' })
+  @ApiResponse({ status: 201, description: 'Enfant créé et lié au parent' })
+  @ApiResponse({ status: 401, description: 'Token manquant ou invalide' })
+  @ApiResponse({ status: 403, description: 'Rôle non autorisé' })
+  async createChildForSelf(@Req() req: any, @Body() createChildDto: CreateChildDto) {
+    const tokenUserId = req?.user?.userId;
+    if (!req || !req.user || !tokenUserId) {
+      throw new UnauthorizedException({ message: 'Token manquant ou invalide' });
+    }
+    // caller must be PARENT (Roles decorator enforces it) — pass tokenUserId as parent
+    return this.usersService.createChildForParent(tokenUserId, createChildDto);
+  }
 
   private readonly logger = new Logger(UsersController.name);
 
@@ -345,6 +415,48 @@ export class UsersController {
     throw new ForbiddenException('Accès refusé : rôle insuffisant');
   }
 
+  @Get('enfants')
+  @Roles(UserRole.COACH, UserRole.ACADEMIE, UserRole.PARENT)
+  @ApiOperation({ summary: 'Récupérer la liste compacte des enfants (Coach/Académie; Parent returns own children)' })
+  @ApiResponse({ status: 200, description: 'Liste compacte des enfants' })
+  async getChildrenCompact(@Req() req: any) {
+    const role = req?.user?.role;
+    const tokenUserId = req?.user?.userId;
+    this.logger.debug(`GET /users/enfants called; role=${role}; tokenUserId=${tokenUserId}`);
+
+    // Require authentication for this endpoint — do not return an unauthenticated full list
+    if (!req || !req.user || !tokenUserId) {
+      this.logger.warn('Unauthorized request to GET /users/enfants');
+      throw new UnauthorizedException('Token manquant ou invalide');
+    }
+
+    const roleStr = (role || '').toString().toLowerCase();
+    if (roleStr === UserRole.PARENT) {
+      // Parent: return only children they own (by parent OR createdBy)
+      const listWithParent = await this.usersService.findChildrenCompactByParent(tokenUserId);
+      this.logger.debug(`Returning ${listWithParent.length} children for parent ${tokenUserId}`);
+      return listWithParent.map(({ _id, prenom, nom, fullName }: any) => ({ _id, prenom, nom, fullName, ownedByRequester: true }));
+    }
+
+    if (roleStr === UserRole.COACH || roleStr === UserRole.ACADEMIE) {
+      // For coach/academie, return full list but mark which are owned by the requester (rarely true for these roles)
+      const list = await this.usersService.findAllChildrenCompactWithOwners();
+      const mapped = list.map((c: any) => ({
+        _id: c._id,
+        prenom: c.prenom,
+        nom: c.nom,
+        fullName: c.fullName,
+        ownedByRequester: c.parent === tokenUserId || c.createdBy === tokenUserId,
+      }));
+      this.logger.debug(`Returning ${mapped.length} total children for role=${role}`);
+      return mapped;
+    }
+
+    // For any other role, forbid
+    this.logger.warn(`Access denied to /users/enfants for role=${role}`);
+    throw new ForbiddenException('Accès refusé : rôle insuffisant');
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Récupérer un utilisateur par ID' })
@@ -486,11 +598,15 @@ export class UsersController {
   @ApiParam({ name: 'id', description: 'ID de l\'utilisateur' })
   @ApiResponse({ status: 200, description: 'Utilisateur supprimé' })
   @ApiResponse({ status: 404, description: 'Utilisateur non trouvé' })
-  @ApiResponse({ status: 403, description: 'Accès refusé' })
-  async remove(@Param('id') id: string, @Request() req) {
-    const currentUserRole = req.user?.role;
-    // Le JWT strategy retourne userId, pas sub
-    const currentUserId = req.user?.userId || req.user?.sub;
+  remove(@Param('id') id: string) {
+    // sanitize and validate the incoming id (clients sometimes include trailing spaces)
+    const raw = id || '';
+    const decoded = decodeURIComponent(raw).trim();
+    if (!decoded || !Types.ObjectId.isValid(decoded)) {
+      throw new BadRequestException('id invalide');
+    }
+    return this.usersService.remove(decoded);
+  }
 
     const user = await this.usersService.findById(id);
     if (!user) {
@@ -576,7 +692,7 @@ export class UsersController {
         filename: (req, file, cb) => {
           // Use UUID for filename and preserve extension
           const ext = extname(file.originalname) || '';
-          const filename = `${randomUUID()}${ext}`;
+          const filename = `${uuidv4()}${ext}`;
           cb(null, filename);
         },
       }),
@@ -669,7 +785,7 @@ export class UsersController {
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       // remove uploaded file if present
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       throw new PayloadTooLargeException('Fichier trop volumineux');
     }
 
@@ -694,7 +810,7 @@ export class UsersController {
     }
     if (!authorized) {
       // remove uploaded file if present
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       throw new ForbiddenException('Non autorisé à uploader cette photo');
     }
 
@@ -709,11 +825,11 @@ export class UsersController {
       const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47;
       const isWebp = header.toString('ascii', 0, 4) === 'RIFF' && header.toString('ascii', 8, 12) === 'WEBP';
       if (!isJpeg && !isPng && !isWebp) {
-        try { fs.unlinkSync((file as any).path); } catch (e) {}
+        try { fs.unlinkSync((file as any).path); } catch (e) { }
         throw new UnsupportedMediaTypeException('Type de fichier non supporté');
       }
     } catch (err) {
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       if (err instanceof UnsupportedMediaTypeException) throw err;
       throw new BadRequestException('Erreur lors de la validation du fichier');
     }
@@ -726,10 +842,37 @@ export class UsersController {
       return { success: true, photoProfil: publicUrl, user: updated };
     } catch (e) {
       // remove file on error
-      try { fs.unlinkSync((file as any).path); } catch (err2) {}
+      try { fs.unlinkSync((file as any).path); } catch (err2) { }
       this.logger.error('Error saving photo URL to user', e?.message || e);
       throw new Error('Erreur interne lors de l\'upload');
     }
+  }
+  @Patch(':id/fcm-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Mettre à jour le token FCM pour les notifications push' })
+  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        fcmToken: { type: 'string', example: 'fcm_token_string' },
+      },
+      required: ['fcmToken'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Token FCM mis à jour' })
+  async updateFcmToken(@Param('id') id: string, @Body('fcmToken') fcmToken: string, @Req() req: any) {
+    const tokenUserId = req?.user?.userId;
+    if (!req || !req.user || !tokenUserId) {
+      throw new UnauthorizedException('Token manquant ou invalide');
+    }
+
+    // Allow user to update their own token
+    if (tokenUserId !== id) {
+      throw new ForbiddenException('Vous ne pouvez mettre à jour que votre propre token FCM');
+    }
+
+    return this.usersService.update(id, { fcmToken });
   }
 }
 

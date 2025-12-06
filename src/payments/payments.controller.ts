@@ -1,74 +1,72 @@
-import { Body, Controller, Post, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Post, Headers, RawBodyRequest, Req, BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
-import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
-import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { Request } from 'express';
+import Stripe from 'stripe';
 
-@ApiTags('Payments')
 @Controller('payments')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth('JWT-auth')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+    private stripe: Stripe;
 
-  @Post('create-intent')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Créer un PaymentIntent Stripe' })
-  @ApiResponse({
-    status: 201,
-    description: 'PaymentIntent créé avec succès',
-    schema: {
-      example: {
-        clientSecret: 'pi_1234567890_secret_abc123',
-        paymentIntentId: 'pi_1234567890',
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Données invalides' })
-  @ApiResponse({ status: 401, description: 'Non autorisé' })
-  async createPaymentIntent(@Body() createPaymentIntentDto: CreatePaymentIntentDto) {
-    const { amount, currency, paymentMethodId, subscriptionId } = createPaymentIntentDto;
+    constructor(private readonly paymentsService: PaymentsService) {
+        this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+            apiVersion: '2024-12-18.acacia',
+        } as any);
+    }
 
-    // Convertir le montant en centimes si nécessaire (si reçu en euros)
-    // Le frontend devrait envoyer le montant en centimes, mais on vérifie
-    const amountInCents = amount < 100 ? Math.round(amount * 100) : amount;
+    @Post('create-payment-intent')
+    async createPaymentIntent(@Body() body: {
+        amount: number;
+        currency?: string;
+        phoneNumber?: string;
+    }) {
+        return this.paymentsService.createPaymentIntent(
+            body.amount,
+            body.currency,
+            body.phoneNumber,
+        );
+    }
 
-    return this.paymentsService.createPaymentIntent(
-      amountInCents,
-      currency || 'eur',
-      paymentMethodId,
-      subscriptionId,
-    );
-  }
+    @Post('confirm-payment')
+    async confirmPayment(@Body() body: { paymentIntentId: string }) {
+        return this.paymentsService.confirmPayment(body.paymentIntentId);
+    }
 
-  @Post('confirm')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Confirmer un paiement Stripe' })
-  @ApiResponse({
-    status: 200,
-    description: 'Paiement confirmé avec succès',
-    schema: {
-      example: {
-        status: 'succeeded',
-        paymentIntentId: 'pi_1234567890',
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Erreur lors de la confirmation' })
-  @ApiResponse({ status: 401, description: 'Non autorisé' })
-  async confirmPayment(@Body() confirmPaymentDto: ConfirmPaymentDto) {
-    const { paymentIntentId, paymentMethodId } = confirmPaymentDto;
-    return this.paymentsService.confirmPayment(paymentIntentId, paymentMethodId);
-  }
+    /**
+     * Webhook Stripe pour gérer les événements de paiement
+     * IMPORTANT: Configurez ce webhook dans votre dashboard Stripe
+     */
+    @Post('webhook')
+    async handleWebhook(
+        @Headers('stripe-signature') signature: string,
+        @Req() request: Request,
+    ) {
+        const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+        if (!endpointSecret) {
+            throw new BadRequestException('STRIPE_WEBHOOK_SECRET is not set');
+        }
+
+        let event: Stripe.Event;
+
+        try {
+            // Vérifier que le webhook provient bien de Stripe
+            const rawBody = (request as any).rawBody;
+
+            if (!rawBody) {
+                throw new BadRequestException('Request body is missing');
+            }
+
+            event = this.stripe.webhooks.constructEvent(
+                rawBody,
+                signature,
+                endpointSecret,
+            );
+        } catch (err) {
+            console.error('⚠️  Webhook signature verification failed.', err.message);
+            throw new BadRequestException(`Webhook Error: ${err.message}`);
+        }
+
+        // Traiter l'événement
+        return this.paymentsService.handleWebhook(event);
+    }
 }
-
-
-
-
-
-
-
-
-
-

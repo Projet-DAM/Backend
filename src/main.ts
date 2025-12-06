@@ -51,9 +51,9 @@ async function bootstrap() {
     throw new Error(`No free port in range ${start}-${end}`);
   }
 
-  const defaultPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-  const maxProbePort = defaultPort + 10;
-  const selectedPort = await findFreePort(defaultPort, maxProbePort);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+  });
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
@@ -78,15 +78,19 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
-  // CORS - Allow all origins for development
+  // CORS - Configuration pour permettre les requêtes depuis Swift
   app.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
+    origin: true, // Permet toutes les origines (à restreindre en production)
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+    exposedHeaders: ['Content-Type', 'Authorization'],
   });
 
   const config = new DocumentBuilder()
@@ -113,49 +117,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  // Enable Socket.IO adapter (matches MessagesGateway using socket.io)
-  app.useWebSocketAdapter(new IoAdapter(app));
-
-  // Guard global (après configuration Swagger pour ne pas bloquer /api et /api-json)
-  // IMPORTANT: This is AFTER static file serving so /uploads/* is publicly accessible
-  const reflector = app.get(Reflector);
-  app.useGlobalGuards(new JwtAuthGuard(reflector));
-
-  // Listen on ALL network interfaces (0.0.0.0) so external devices can connect
-  await app.listen(selectedPort, '0.0.0.0');
-  
-  // Get and display all network addresses for easy access
-  const os = require('os');
-  const networkInterfaces = os.networkInterfaces();
-  const addresses: string[] = [];
-  
-  Object.keys(networkInterfaces).forEach(interfaceName => {
-    networkInterfaces[interfaceName].forEach((iface: any) => {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        addresses.push(iface.address);
-      }
-    });
-  });
-  
-  console.log('\n========================================');
-  console.log('🚀 Backend Server Started Successfully!');
-  console.log('========================================');
-  console.log(`📍 Listening on port: ${selectedPort}`);
-  console.log(`📂 Serving uploads from: ${uploadsPath}`);
-  console.log('\n🌐 Access the server from:');
-  console.log(`   Local:    http://localhost:${selectedPort}`);
-  addresses.forEach(addr => {
-    console.log(`   Network:  http://${addr}:${selectedPort}`);
-  });
-  console.log('\n📱 For Android app, use one of the Network URLs above');
-  console.log(`📖 Swagger API docs: http://localhost:${selectedPort}/api`);
-  console.log(`🔍 Network info: http://localhost:${selectedPort}/diagnostics/network/info`);
-  console.log(`🖼️  Test image access: http://localhost:${selectedPort}/test-image`);
-  console.log('========================================\n');
-  
-  console.log('⚠️  IMPORTANT: Ensure Windows Firewall allows port', selectedPort);
-  console.log('   Run as Admin: New-NetFirewallRule -DisplayName "Node Dev" -Direction Inbound -Action Allow -Protocol TCP -LocalPort', selectedPort);
-  console.log('========================================\n');
+  const port = process.env.PORT || 3000;
+  await app.listen(3000, '0.0.0.0');
+  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(`Swagger documentation: http://localhost:${port}/api`);
 }
 
 bootstrap();

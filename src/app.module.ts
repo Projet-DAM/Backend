@@ -4,50 +4,41 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
+import { ActivitiesModule } from './activities/activities.module';
 import { AuthModule } from './auth/auth.module';
-import { SuiviEnfantModule } from './suivi-enfant/suivi-enfant.module';
-import { UploadsModule } from './uploads/uploads.module';
-import { MessagesModule } from './messages/messages.module';
-
-import { OffersModule } from './offers/offers.module';
-import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { ProgramsModule } from './programs/programs.module';
+import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { PaymentsModule } from './payments/payments.module';
-import { TournoiModule } from './tournoi/tournoi.module';
-import { InscriptionModule } from './inscriptions/inscription.module';
-import { EquipeModule } from './equipes/equipe.module';
-import { MatchesModule } from './matches/matches.module';
-import { FirebaseModule } from './firebase/firebase.module';
-import { NotificationModule } from './notifications/notification.module';
-import { CallsModule } from './calls/calls.module';
-import { DiagnosticsModule } from './diagnostics/diagnostics.module';
-import { TestModule } from './test/test.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+
+import { FirebaseService } from './common/firebase.service';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/sportyconnect'),
+    // <‑‑ SERVE STATIC BEGIN
+    ServeStaticModule.forRoot({
+      // Chemin du répertoire contenant les images.
+      // __dirname pointe vers dist (ou src en mode dev) ; on remonte d’un niveau
+      // puis on indique le dossier uploads à la racine du projet.
+      rootPath: join(__dirname, '..', 'uploads'),
+
+      // URL à laquelle les fichiers seront accessibles depuis le client.
+      // Exemple : http://<host>:3000/uploads/mon‑image.jpg
+      serveRoot: '/uploads',
+    }),
+    // <‑‑ SERVE STATIC END
     UsersModule,
+    ActivitiesModule,
     AuthModule,
-    SuiviEnfantModule,
-    UploadsModule,
-    MessagesModule,
-    OffersModule,
-    SubscriptionsModule,
+    ProgramsModule,
+    EnrollmentsModule,
     PaymentsModule,
-    TournoiModule,
-    InscriptionModule,
-    EquipeModule,
-    MatchesModule,
-    FirebaseModule,
-    NotificationModule,
-    CallsModule,
-    DiagnosticsModule,
-    TestModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, FirebaseService],
+  exports: [FirebaseService],
 })
-export class AppModule {}
+export class AppModule { }

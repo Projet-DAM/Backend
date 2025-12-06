@@ -1,22 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { TwilioService } from './twilio.service';
 
 @Module({
-  imports: [ConfigModule],
-  controllers: [PaymentsController],
-  providers: [PaymentsService],
-  exports: [PaymentsService],
+    controllers: [PaymentsController],
+    providers: [PaymentsService, TwilioService],
 })
-export class PaymentsModule {}
-
-
-
-
-
-
-
-
-
-
+export class PaymentsModule { }

@@ -1,4 +1,3 @@
-import { UserRole } from './interfaces/user-role.enum';
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -14,7 +13,7 @@ export class UsersService {
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-  ) {}
+  ) { }
 
   async removeChild(childId: string, parentId: string): Promise<{ success: boolean; childId: string }> {
     if (!Types.ObjectId.isValid(childId)) {
@@ -167,36 +166,14 @@ export class UsersService {
     return savedUser;
   }
 
-  async findAll(filters?: { role?: UserRole; parentId?: string }): Promise<UserDocument[]> {
-    const query: any = {};
-    
-    if (filters?.role) {
-      query.role = filters.role;
-    }
-    
-    if (filters?.parentId) {
-      // Convertir parentId (string) en ObjectId pour la requête MongoDB
-      try {
-        query.parent = new Types.ObjectId(filters.parentId);
-        console.log(`[UsersService] findAll - Filtrage par parentId: ${filters.parentId} (ObjectId: ${query.parent})`);
-      } catch (error) {
-        console.error(`[UsersService] Erreur lors de la conversion du parentId en ObjectId: ${error}`);
-        throw new BadRequestException(`ID parent invalide: ${filters.parentId}`);
-      }
-    }
-    
-    console.log(`[UsersService] findAll - Query:`, JSON.stringify(query));
-    const users = await this.userModel.find(query).populate('enfants').populate('parent').exec();
-    console.log(`[UsersService] findAll - Résultat: ${users.length} utilisateur(s) trouvé(s)`);
-    if (filters?.role === UserRole.ENFANT && users.length > 0) {
-      console.log(`[UsersService] Détails des enfants:`, users.map(u => ({ 
-        id: u._id?.toString(), 
-        nom: u.nom, 
-        prenom: u.prenom, 
-        parent: u.parent?.toString() || u.parent 
-      })));
-    }
-    return users;
+  async findAll(role?: UserRole): Promise<UserDocument[]> {
+    const query = role ? { role } : {};
+    return this.userModel
+      .find(query)
+      .populate('enfants')
+      .populate('parent')
+      .populate('coach')
+      .exec();
   }
 
   async findById(id: string): Promise<UserDocument | null> {
@@ -355,9 +332,8 @@ export class UsersService {
     if (!Types.ObjectId.isValid(cleanId)) {
       throw new BadRequestException('id invalide');
     }
-
-    const user = await this.userModel.findById(cleanId);
-    if (!user) {
+    const result = await this.userModel.findByIdAndDelete(cleanId);
+    if (!result) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
@@ -526,53 +502,6 @@ export class UsersService {
   // Récupérer les enfants d'un coach (utilisé par les coaches pour sélectionner un enfant)
   async getChildrenOfCoach(coachId: string): Promise<UserDocument[]> {
     return this.userModel.find({ coach: coachId, role: UserRole.ENFANT }).exec();
-  }
-
-  async updateVerificationCode(userId: string, code: string, expiresAt: Date): Promise<void> {
-    await this.userModel.findByIdAndUpdate(userId, {
-      verificationCode: code,
-      verificationCodeExpires: expiresAt,
-    });
-  }
-
-  async markEmailAsVerified(userId: string): Promise<void> {
-    await this.userModel.findByIdAndUpdate(userId, {
-      emailVerified: true,
-      verificationCode: undefined,
-      verificationCodeExpires: undefined,
-    });
-  }
-
-  async getChildData(parentId: string, childId: string): Promise<UserDocument> {
-    const parent = await this.userModel.findById(parentId);
-    if (!parent) {
-      throw new NotFoundException('Parent non trouvé');
-    }
-
-    if (parent.role !== UserRole.PARENT) {
-      throw new BadRequestException('L\'utilisateur doit être un parent');
-    }
-
-    const child = await this.userModel.findById(childId);
-    if (!child) {
-      throw new NotFoundException('Enfant non trouvé');
-    }
-
-    if (child.role !== UserRole.ENFANT) {
-      throw new BadRequestException('L\'utilisateur doit être un enfant');
-    }
-
-    // Vérifier que l'enfant appartient bien au parent
-    if (!child.parent || child.parent.toString() !== parentId) {
-      throw new BadRequestException('Cet enfant n\'appartient pas à ce parent');
-    }
-
-    // Vérifier que l'enfant est dans la liste des enfants du parent
-    if (!parent.enfants || !parent.enfants.some(id => id.toString() === childId)) {
-      throw new BadRequestException('Cet enfant n\'appartient pas à ce parent');
-    }
-
-    return child;
   }
 }
 

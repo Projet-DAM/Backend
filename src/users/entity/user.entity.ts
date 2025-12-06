@@ -85,6 +85,9 @@ export class User {
 
   createdAt?: Date;
   updatedAt?: Date;
+
+  @Prop()
+  fcmToken?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
