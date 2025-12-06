@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { UserRole } from '../interfaces/user-role.enum';
+import { SportType } from '../interfaces/sport-type.enum';
 
 export type UserDocument = User & Document;
 
@@ -49,6 +50,11 @@ export class User {
   @Prop()
   dateNaissance?: Date;
 
+  @Prop({ enum: ['M', 'F'] })
+  sexe?: string;
+  @Prop({ enum: SportType })
+  sportPratique?: SportType;
+
   // Attributs spécifiques à l'Académie
   @Prop()
   nomAcademie?: string;
@@ -66,6 +72,16 @@ export class User {
       fin: string;
     };
   };
+
+  // Champs pour la vérification d'email
+  @Prop()
+  verificationCode?: string;
+
+  @Prop({ type: Date })
+  verificationCodeExpires?: Date;
+
+  @Prop({ default: false })
+  emailVerified?: boolean;
 
   createdAt?: Date;
   updatedAt?: Date;

@@ -80,6 +80,16 @@ export class UpdateUserDto {
   @IsDateString()
   dateNaissance?: string;
 
+  @ApiProperty({ 
+    example: 'M', 
+    description: 'Sexe de l\'enfant (M ou F)',
+    required: false,
+    enum: ['M', 'F']
+  })
+  @IsOptional()
+  @IsEnum(['M', 'F'])
+  sexe?: string;
+
   // Attributs spécifiques à l'Académie
   @ApiProperty({
     example: 'Académie de Football Excellence',

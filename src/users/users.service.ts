@@ -5,7 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './entity/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UserRole } from './interfaces/user-role.enum';
+import { CreateChildDto } from './dto/create-child.dto';
 
 @Injectable()
 export class UsersService {
@@ -15,15 +15,59 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) { }
 
+  async removeChild(childId: string, parentId: string): Promise<{ success: boolean; childId: string }> {
+    if (!Types.ObjectId.isValid(childId)) {
+      throw new BadRequestException('childId invalide');
+    }
+    if (!Types.ObjectId.isValid(parentId)) {
+      throw new BadRequestException('parentId invalide');
+    }
+    // Vérifier que l'enfant existe et appartient bien au parent
+    const child = await this.userModel.findById(childId);
+    if (!child) {
+      throw new NotFoundException("Enfant non trouvé");
+    }
+    if (child.role !== UserRole.ENFANT) {
+      throw new BadRequestException("L'utilisateur n'est pas un enfant");
+    }
+    // Autoriser la suppression si le demandeur est le parent lié OU si c'est une académie
+    let isAuthorized = false;
+    // Parent lié ?
+    if (child.parent && child.parent.toString() === parentId) {
+      isAuthorized = true;
+    } else if ('createdBy' in child && child['createdBy'] && child['createdBy'].toString() === parentId) {
+      isAuthorized = true;
+    }
+    // Si le parentId correspond à un utilisateur de rôle ACADEMIE, autoriser aussi
+    const requester = await this.userModel.findById(parentId);
+    if (requester && requester.role === UserRole.ACADEMIE) {
+      isAuthorized = true;
+    }
+    if (!isAuthorized) {
+      throw new BadRequestException("Non autorisé à supprimer cet enfant");
+    }
+    // Supprimer l'enfant de la liste des enfants du parent
+    await this.userModel.updateOne(
+      { _id: parentId },
+      { $pull: { enfants: child._id } }
+    );
+    // Supprimer l'enfant de la base
+    await this.userModel.findByIdAndDelete(childId);
+    return { success: true, childId };
+  }
+
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
-    // Vérifier si l'email existe déjà
-    const existingUser = await this.userModel.findOne({ email: createUserDto.email });
-    if (existingUser) {
-      throw new ConflictException('Cet email est déjà utilisé');
+    // Vérifier si l'email existe déjà (sauf pour les enfants avec email temporaire)
+    if (createUserDto.email && !createUserDto.email.includes('@temp.com')) {
+      const existingUser = await this.userModel.findOne({ email: createUserDto.email });
+      if (existingUser) {
+        throw new ConflictException('Cet email est déjà utilisé');
+      }
     }
 
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(createUserDto.motDePasse, 10);
+    // Hasher le mot de passe (ou générer un mot de passe temporaire pour les enfants)
+    const passwordToHash = createUserDto.motDePasse || 'temp123';
+    const hashedPassword = await bcrypt.hash(passwordToHash, 10);
 
     // Validation logique selon le rôle
     const userData: any = {
@@ -47,6 +91,20 @@ export class UsersService {
       delete userData.adresse;
       delete userData.description;
       delete userData.horaires;
+      
+      // Gérer le parentId si fourni
+      if (createUserDto.parentId) {
+        const parent = await this.userModel.findById(createUserDto.parentId);
+        if (!parent) {
+          throw new NotFoundException('Parent non trouvé');
+        }
+        if (parent.role !== UserRole.PARENT) {
+          throw new BadRequestException('L\'utilisateur spécifié comme parent doit avoir le rôle parent');
+        }
+        // Convertir parentId (string) en ObjectId
+        userData.parent = new Types.ObjectId(createUserDto.parentId);
+        delete userData.parentId; // Supprimer parentId car on utilise parent (ObjectId)
+      }
     } else if (createUserDto.role === UserRole.PARENT) {
       // Un parent peut avoir des enfants, mais ne peut pas avoir d'attribut parent
       delete userData.parent;
@@ -89,7 +147,23 @@ export class UsersService {
     }
 
     const user = new this.userModel(userData);
-    return user.save();
+    const savedUser = await user.save();
+
+    // Si c'est un enfant avec un parent, ajouter l'enfant à la liste des enfants du parent
+    if (createUserDto.role === UserRole.ENFANT && savedUser.parent) {
+      const parent = await this.userModel.findById(savedUser.parent);
+      if (parent) {
+        if (!parent.enfants) {
+          parent.enfants = [];
+        }
+        if (!parent.enfants.some((id: any) => id.toString() === savedUser._id.toString())) {
+          parent.enfants.push(savedUser._id);
+          await parent.save();
+        }
+      }
+    }
+
+    return savedUser;
   }
 
   async findAll(role?: UserRole): Promise<UserDocument[]> {
@@ -262,6 +336,19 @@ export class UsersService {
     if (!result) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
+
+    // Si c'est un enfant, le retirer de la liste des enfants du parent
+    if (user.role === UserRole.ENFANT && user.parent) {
+      const parent = await this.userModel.findById(user.parent);
+      if (parent && parent.enfants) {
+        parent.enfants = parent.enfants.filter(
+          (childId: any) => childId.toString() !== cleanId,
+        );
+        await parent.save();
+      }
+    }
+
+    await this.userModel.findByIdAndDelete(cleanId);
   }
 
   async linkChild(parentId: string, childId: string): Promise<UserDocument> {
