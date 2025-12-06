@@ -21,7 +21,7 @@ async function bootstrap() {
     './uploads/messages/audio',
     './uploads/tournois',
   ];
-  
+
   uploadDirs.forEach(dir => {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
@@ -29,33 +29,9 @@ async function bootstrap() {
     }
   });
 
-  // Find a free port first to avoid partial app startup logs followed by EADDRINUSE
-  const net = await import('net');
-  async function findFreePort(start: number, end: number): Promise<number> {
-    for (let p = start; p <= end; p++) {
-      // attempt to bind a temporary server
-      // eslint-disable-next-line no-await-in-loop
-      const free = await new Promise<boolean>((resolve) => {
-        const tester = net.createServer()
-          .once('error', () => {
-            resolve(false);
-          })
-          .once('listening', () => {
-            tester.close();
-            resolve(true);
-          })
-          .listen(p, '0.0.0.0');
-      });
-      if (free) return p;
-    }
-    throw new Error(`No free port in range ${start}-${end}`);
-  }
-
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
-
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Request logging middleware (before other middleware)
   app.use((req, res, next) => {
@@ -69,7 +45,7 @@ async function bootstrap() {
   // dist/main.js -> ../../uploads would be project-root/uploads (correct)
   const uploadsPath = join(__dirname, '..', '..', 'uploads');
   console.log(`Serving static files from: ${uploadsPath}`);
-  
+
   // Use Express static middleware directly for better control
   app.use('/uploads', express.static(uploadsPath));
 
@@ -118,7 +94,7 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, document);
 
   const port = process.env.PORT || 3000;
-  await app.listen(3000, '0.0.0.0');
+  await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://localhost:${port}`);
   console.log(`Swagger documentation: http://localhost:${port}/api`);
 }

@@ -13,6 +13,18 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
 import { FirebaseService } from './common/firebase.service';
+import { CallsModule } from './calls/calls.module';
+import { DiagnosticsModule } from './diagnostics/diagnostics.module';
+import { EquipeModule } from './equipes/equipe.module';
+import { InscriptionModule } from './inscriptions/inscription.module';
+import { MatchesModule } from './matches/matches.module';
+import { MessagesModule } from './messages/messages.module';
+import { NotificationModule } from './notifications/notification.module';
+import { OffersModule } from './offers/offers.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { SuiviEnfantModule } from './suivi-enfant/suivi-enfant.module';
+import { TournoiModule } from './tournoi/tournoi.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -36,6 +48,18 @@ import { FirebaseService } from './common/firebase.service';
     ProgramsModule,
     EnrollmentsModule,
     PaymentsModule,
+    CallsModule,
+    DiagnosticsModule,
+    EquipeModule,
+    InscriptionModule,
+    MatchesModule,
+    MessagesModule,
+    NotificationModule,
+    OffersModule,
+    SubscriptionsModule,
+    SuiviEnfantModule,
+    TournoiModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [AppService, FirebaseService],

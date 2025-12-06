@@ -6,6 +6,7 @@ import { User, UserDocument } from './entity/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateChildDto } from './dto/create-child.dto';
+import { UserRole } from './interfaces/user-role.enum';
 
 @Injectable()
 export class UsersService {
@@ -91,7 +92,7 @@ export class UsersService {
       delete userData.adresse;
       delete userData.description;
       delete userData.horaires;
-      
+
       // Gérer le parentId si fourni
       if (createUserDto.parentId) {
         const parent = await this.userModel.findById(createUserDto.parentId);
@@ -166,14 +167,48 @@ export class UsersService {
     return savedUser;
   }
 
-  async findAll(role?: UserRole): Promise<UserDocument[]> {
-    const query = role ? { role } : {};
+  async findAll(filters?: { role?: UserRole; parentId?: string }): Promise<UserDocument[]> {
+    const query: any = {};
+    if (filters?.role) {
+      query.role = filters.role;
+    }
+    if (filters?.parentId) {
+      // If parentId is provided, we might need to check 'parent' field or 'createdBy' depending on logic
+      // But typically for 'findAll' with parentId, it means "children of this parent"
+      // However, existing logic in controller seems to handle permissions.
+      // Let's assume we filter by 'parent' field if it's an ENFANT role search
+      if (filters.role === UserRole.ENFANT) {
+        query.parent = filters.parentId;
+      }
+    }
+
     return this.userModel
       .find(query)
       .populate('enfants')
       .populate('parent')
       .populate('coach')
       .exec();
+  }
+
+  async updateVerificationCode(userId: string, code: string, expiresAt: Date): Promise<void> {
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        verificationCode: code,
+        verificationCodeExpires: expiresAt
+      }
+    );
+  }
+
+  async markEmailAsVerified(userId: string): Promise<void> {
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        emailVerified: true,
+        verificationCode: null,
+        verificationCodeExpires: null
+      }
+    );
   }
 
   async findById(id: string): Promise<UserDocument | null> {
@@ -338,8 +373,8 @@ export class UsersService {
     }
 
     // Si c'est un enfant, le retirer de la liste des enfants du parent
-    if (user.role === UserRole.ENFANT && user.parent) {
-      const parent = await this.userModel.findById(user.parent);
+    if (result.role === UserRole.ENFANT && result.parent) {
+      const parent = await this.userModel.findById(result.parent);
       if (parent && parent.enfants) {
         parent.enfants = parent.enfants.filter(
           (childId: any) => childId.toString() !== cleanId,
@@ -347,8 +382,6 @@ export class UsersService {
         await parent.save();
       }
     }
-
-    await this.userModel.findByIdAndDelete(cleanId);
   }
 
   async linkChild(parentId: string, childId: string): Promise<UserDocument> {

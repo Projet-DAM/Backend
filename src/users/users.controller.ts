@@ -12,6 +12,7 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   Req,
+  Request,
   Logger,
   ForbiddenException,
   UnauthorizedException,
@@ -43,6 +44,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateChildDto } from './dto/create-child.dto';
+import { UserResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from './interfaces/user-role.enum';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -131,106 +133,12 @@ export class UsersController {
     return this.usersService.createChildForParent(tokenUserId, createChildDto);
   }
 
-  private readonly logger = new Logger(UsersController.name);
 
-  @Delete('children/:childId')
-  @UseGuards(JwtAuthGuard)
-  @Roles(UserRole.PARENT, UserRole.ACADEMIE)
-  @ApiOperation({ summary: 'Supprimer un enfant (PARENT ou ACADEMIE)' })
-  @ApiParam({ name: 'childId', description: "ID de l'enfant à supprimer" })
-  @ApiResponse({ status: 200, description: 'Enfant supprimé avec succès' })
-  @ApiResponse({ status: 403, description: 'Non autorisé à supprimer cet enfant' })
-  @ApiResponse({ status: 404, description: 'Enfant non trouvé' })
-  async deleteChild(
-    @Param('childId') childId: string,
-    @Req() req: any
-  ): Promise<{ success: boolean; childId: string }> {
-    const tokenUserId = req?.user?.userId;
-    if (!req || !req.user || !tokenUserId) {
-      throw new UnauthorizedException('Token manquant ou invalide');
-    }
-    if (!childId || !Types.ObjectId.isValid(childId)) {
-      throw new BadRequestException({ message: "childId invalide" });
-    }
-    // Supprimer l'enfant (le service gère l'autorisation parent/académie)
-    return this.usersService.removeChild(childId, tokenUserId);
-  }
-
-  @Post(':id/children')
-  @Roles(UserRole.PARENT)
-  @ApiOperation({ summary: 'Créer un enfant et le lier au parent (PARENT uniquement)' })
-  @ApiParam({ name: 'id', description: 'ID du parent' })
-  @ApiBody({
-    type: CreateChildDto,
-    examples: {
-      simpleChild: {
-        summary: 'Create a child (minimal)',
-        value: {
-          nom: 'Petit',
-          prenom: 'Paul',
-          dateNaissance: '2014-05-10'
-        }
-      },
-      withPhoto: {
-        summary: 'Create a child with photo',
-        value: {
-          nom: 'Petit',
-          prenom: 'Paul',
-          dateNaissance: '2014-05-10',
-          photoProfil: 'https://example.com/paul.jpg'
-        }
-      }
-    }
-  })
-  @UseGuards(JwtAuthGuard)
-  async createChild(@Param('id') id: string, @Body() createChildDto: CreateChildDto, @Req() req: any) {
-    // If authenticated, prefer the token's userId as the parent
-    const tokenUserId = req?.user?.userId;
-    if (!req || !req.user || !tokenUserId) {
-      throw new UnauthorizedException({ message: 'Token manquant ou invalide' });
-    }
-
-    // sanitize and validate provided id
-    const raw = id || '';
-    const decoded = decodeURIComponent(raw).trim();
-    if (!decoded) {
-      throw new BadRequestException({ message: 'parentId manquant' });
-    }
-    if (!Types.ObjectId.isValid(decoded)) {
-      throw new BadRequestException({ message: 'parentId invalide' });
-    }
-
-    // Ensure the caller has permission to create for this parent. If the caller is a parent,
-    // they may only create children for themselves (tokenUserId must match path id).
-    const callerRole = req.user.role;
-    if (callerRole === UserRole.PARENT && tokenUserId !== decoded) {
-      throw new ForbiddenException({ message: 'Un parent ne peut créer un enfant que pour lui-même' });
-    }
-
-    return this.usersService.createChildForParent(decoded, createChildDto);
-  }
-
-
-  @Post('children')
-  @UseGuards(JwtAuthGuard)
-  @Roles(UserRole.PARENT)
-  @ApiOperation({ summary: 'Créer un enfant pour le parent authentifié (utilise le token JWT)' })
-  @ApiResponse({ status: 201, description: 'Enfant créé et lié au parent' })
-  @ApiResponse({ status: 401, description: 'Token manquant ou invalide' })
-  @ApiResponse({ status: 403, description: 'Rôle non autorisé' })
-  async createChildForSelf(@Req() req: any, @Body() createChildDto: CreateChildDto) {
-    const tokenUserId = req?.user?.userId;
-    if (!req || !req.user || !tokenUserId) {
-      throw new UnauthorizedException({ message: 'Token manquant ou invalide' });
-    }
-    // caller must be PARENT (Roles decorator enforces it) — pass tokenUserId as parent
-    return this.usersService.createChildForParent(tokenUserId, createChildDto);
-  }
 
   // Helper pour transformer UserDocument en format compatible Android
   private transformUserForResponse(user: any): any {
     if (!user) return null;
-    
+
     const transformed: any = {
       id: user._id?.toString() || user.id,
       email: user.email || null,
@@ -242,8 +150,8 @@ export class UsersController {
 
     // Transformer dateNaissance de Date à string (YYYY-MM-DD)
     if (user.dateNaissance) {
-      const date = user.dateNaissance instanceof Date 
-        ? user.dateNaissance 
+      const date = user.dateNaissance instanceof Date
+        ? user.dateNaissance
         : new Date(user.dateNaissance);
       transformed.dateNaissance = date.toISOString().split('T')[0];
     } else {
@@ -340,7 +248,7 @@ export class UsersController {
         parentId = currentUserId.toString();
         console.log(`[UsersController] parentId non fourni, utilisation de currentUserId: ${parentId}`);
       }
-      
+
       // Les parents ne peuvent voir que leurs propres enfants
       if (currentUserRole === UserRole.PARENT) {
         const parentIdStr = parentId?.toString();
@@ -350,7 +258,7 @@ export class UsersController {
           throw new ForbiddenException('Vous ne pouvez voir que vos propres enfants');
         }
       }
-      
+
       // Les coaches et academies peuvent voir tous les enfants
       if (currentUserRole === UserRole.COACH || currentUserRole === UserRole.ACADEMIE) {
         // Pas de restriction, peut voir tous les enfants
@@ -371,48 +279,6 @@ export class UsersController {
       console.log(`[UsersController] Enfants trouvés:`, users.map(u => ({ id: u._id, nom: u.nom, prenom: u.prenom, parent: u.parent })));
     }
     return this.transformUsersForResponse(users);
-  }
-
-  @Get('enfants')
-  @Roles(UserRole.COACH, UserRole.ACADEMIE, UserRole.PARENT)
-  @ApiOperation({ summary: 'Récupérer la liste compacte des enfants (Coach/Académie; Parent returns own children)' })
-  @ApiResponse({ status: 200, description: 'Liste compacte des enfants' })
-  async getChildrenCompact(@Req() req: any) {
-    const role = req?.user?.role;
-    const tokenUserId = req?.user?.userId;
-    this.logger.debug(`GET /users/enfants called; role=${role}; tokenUserId=${tokenUserId}`);
-
-    // Require authentication for this endpoint — do not return an unauthenticated full list
-    if (!req || !req.user || !tokenUserId) {
-      this.logger.warn('Unauthorized request to GET /users/enfants');
-      throw new UnauthorizedException('Token manquant ou invalide');
-    }
-
-    const roleStr = (role || '').toString().toLowerCase();
-    if (roleStr === UserRole.PARENT) {
-      // Parent: return only children they own (by parent OR createdBy)
-      const listWithParent = await this.usersService.findChildrenCompactByParent(tokenUserId);
-      this.logger.debug(`Returning ${listWithParent.length} children for parent ${tokenUserId}`);
-      return listWithParent.map(({ _id, prenom, nom, fullName }: any) => ({ _id, prenom, nom, fullName, ownedByRequester: true }));
-    }
-
-    if (roleStr === UserRole.COACH || roleStr === UserRole.ACADEMIE) {
-      // For coach/academie, return full list but mark which are owned by the requester (rarely true for these roles)
-      const list = await this.usersService.findAllChildrenCompactWithOwners();
-      const mapped = list.map((c: any) => ({
-        _id: c._id,
-        prenom: c.prenom,
-        nom: c.nom,
-        fullName: c.fullName,
-        ownedByRequester: c.parent === tokenUserId || c.createdBy === tokenUserId,
-      }));
-      this.logger.debug(`Returning ${mapped.length} total children for role=${role}`);
-      return mapped;
-    }
-
-    // For any other role, forbid
-    this.logger.warn(`Access denied to /users/enfants for role=${role}`);
-    throw new ForbiddenException('Accès refusé : rôle insuffisant');
   }
 
   @Get('enfants')
@@ -550,23 +416,23 @@ export class UsersController {
         // Si c'est un objet peuplé avec _id
         if (typeof existingUser.parent === 'object' && existingUser.parent._id) {
           childParentId = existingUser.parent._id.toString();
-        } 
+        }
         // Si c'est un ObjectId (non peuplé)
         else if (existingUser.parent.toString) {
           childParentId = existingUser.parent.toString();
-        } 
+        }
         // Sinon convertir en string
         else {
           childParentId = String(existingUser.parent);
         }
       }
-      
+
       // Normaliser currentUserId en string (s'assurer que c'est bien une string)
       const currentUserIdStr = String(currentUserId).trim();
       const childParentIdStr = childParentId ? childParentId.trim() : null;
-      
+
       console.log(`[UsersController] update - childParentId: ${childParentIdStr}, currentUserIdStr: ${currentUserIdStr}, currentUserRole: ${currentUserRole}, existingUser.parent type: ${typeof existingUser.parent}`);
-      
+
       // Les parents ne peuvent modifier que leurs propres enfants
       if (currentUserRole === UserRole.PARENT) {
         if (!childParentIdStr || childParentIdStr !== currentUserIdStr) {
@@ -598,19 +464,24 @@ export class UsersController {
   @ApiParam({ name: 'id', description: 'ID de l\'utilisateur' })
   @ApiResponse({ status: 200, description: 'Utilisateur supprimé' })
   @ApiResponse({ status: 404, description: 'Utilisateur non trouvé' })
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Req() req: any) {
     // sanitize and validate the incoming id (clients sometimes include trailing spaces)
     const raw = id || '';
     const decoded = decodeURIComponent(raw).trim();
     if (!decoded || !Types.ObjectId.isValid(decoded)) {
       throw new BadRequestException('id invalide');
     }
-    return this.usersService.remove(decoded);
-  }
 
-    const user = await this.usersService.findById(id);
+    const currentUserRole = req.user?.role;
+    const currentUserId = req.user?.userId || req.user?.sub;
+
+    if (!currentUserId) {
+      throw new UnauthorizedException('Token manquant ou invalide');
+    }
+
+    const user = await this.usersService.findById(decoded);
     if (!user) {
-      return null;
+      throw new NotFoundException('Utilisateur non trouvé');
     }
 
     // Si on supprime un enfant
@@ -618,29 +489,29 @@ export class UsersController {
       // Extraire l'ID du parent de l'enfant (peut être ObjectId ou objet peuplé)
       let childParentId: string | null = null;
       if (user.parent) {
-        if (typeof user.parent === 'object' && user.parent._id) {
-          childParentId = user.parent._id.toString();
+        if (typeof user.parent === 'object' && (user.parent as any)._id) {
+          childParentId = (user.parent as any)._id.toString();
         } else if (typeof user.parent === 'object' && user.parent.toString) {
           childParentId = user.parent.toString();
         } else {
           childParentId = String(user.parent);
         }
       }
-      
+
       // Normaliser currentUserId en string
       const currentUserIdStr = String(currentUserId);
-      
+
       // Les parents ne peuvent supprimer que leurs propres enfants
       if (currentUserRole === UserRole.PARENT) {
         if (childParentId !== currentUserIdStr) {
-          throw new ForbiddenException(`Vous ne pouvez supprimer que vos propres enfants. Parent de l'enfant: ${childParentId}, Votre ID: ${currentUserIdStr}`);
+          throw new ForbiddenException(`Vous ne pouvez supprimer que vos propres enfants.`);
         }
         // Autoriser le parent à supprimer son enfant
       }
       // Les academies peuvent supprimer tous les enfants
-      if (currentUserRole === UserRole.ACADEMIE) {
+      else if (currentUserRole === UserRole.ACADEMIE) {
         // Autoriser
-      } else if (currentUserRole !== UserRole.PARENT) {
+      } else {
         throw new ForbiddenException('Seuls les parents et academies peuvent supprimer les enfants');
       }
     } else {
@@ -650,8 +521,8 @@ export class UsersController {
       }
     }
 
-    await this.usersService.remove(id);
-    return { success: true, id };
+    await this.usersService.remove(decoded);
+    return { success: true, id: decoded };
   }
 
   @Get(':id/children')
@@ -715,12 +586,12 @@ export class UsersController {
     },
   })
   @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Photo uploadée avec succès',
     type: UserResponseDto
   })
-  @ApiBadRequestResponse({ 
+  @ApiBadRequestResponse({
     description: 'Fichier invalide, format non supporté, ou taille trop grande',
     schema: {
       example: {
@@ -730,7 +601,7 @@ export class UsersController {
       }
     }
   })
-  @ApiUnauthorizedResponse({ 
+  @ApiUnauthorizedResponse({
     description: 'Token JWT manquant ou invalide',
     schema: {
       example: {
@@ -740,7 +611,7 @@ export class UsersController {
       }
     }
   })
-  @ApiNotFoundResponse({ 
+  @ApiNotFoundResponse({
     description: 'Utilisateur non trouvé',
     schema: {
       example: {
