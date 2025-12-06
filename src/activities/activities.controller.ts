@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, ValidationPipe, UseGuards } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { ActivitiesService } from './activities.service';
@@ -10,9 +10,11 @@ import { UserRole } from '../users/interfaces/user-role.enum';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { ImageFileValidator } from '../users/validators/image-file.validator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Activities')
 @ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard)
 @Controller('activities')
 export class ActivitiesController {
   constructor(private readonly activitiesService: ActivitiesService) { }
