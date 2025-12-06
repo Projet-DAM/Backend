@@ -64,11 +64,14 @@ async function bootstrap() {
   });
 
   // Servir les fichiers statiques - MUST be before global guards
-  const uploadsPath = join(__dirname, '..', 'uploads');
+  // In production (dist folder), go up one more level to reach the project root
+  // dist/main.js -> ../uploads would be dist/uploads (wrong)
+  // dist/main.js -> ../../uploads would be project-root/uploads (correct)
+  const uploadsPath = join(__dirname, '..', '..', 'uploads');
   console.log(`Serving static files from: ${uploadsPath}`);
-  app.useStaticAssets(uploadsPath, {
-    prefix: '/uploads/',
-  });
+  
+  // Use Express static middleware directly for better control
+  app.use('/uploads', express.static(uploadsPath));
 
   app.useGlobalPipes(
     new ValidationPipe({
