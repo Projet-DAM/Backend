@@ -60,8 +60,8 @@ export class ProgramsController {
     },
   })
   create(
-    @Body(new ValidationPipe({ 
-      transform: true, 
+    @Body(new ValidationPipe({
+      transform: true,
       transformOptions: { enableImplicitConversion: true },
       skipMissingProperties: false,
       skipNullProperties: false,
@@ -85,7 +85,7 @@ export class ProgramsController {
     if (file) {
       dto.image = `/uploads/${file.filename}`;
     }
-    
+
     // Convertir les strings en nombres pour multipart/form-data
     if (dto.prix !== undefined && dto.prix !== null) {
       if (typeof dto.prix === 'string') {
@@ -96,7 +96,7 @@ export class ProgramsController {
         }
       }
     }
-    
+
     // Convertir activites si c'est une string séparée par des virgules ou un array
     if (dto.activites !== undefined && dto.activites !== null) {
       const activitesValue = dto.activites as any;
@@ -113,7 +113,7 @@ export class ProgramsController {
         dto.activites = undefined;
       }
     }
-    
+
     return this.programsService.create(dto, req.user);
   }
 
@@ -142,7 +142,11 @@ export class ProgramsController {
   @Roles(UserRole.ACADEMIE, UserRole.COACH)
   @ApiOperation({ summary: 'Mettre à jour un programme' })
   @ApiParam({ name: 'id', description: 'ID du programme' })
-  update(@Param('id') id: string, @Body() dto: UpdateProgramDto, @Req() req: any) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateProgramDto,
+    @Req() req: any
+  ) {
     return this.programsService.update(id, dto, req.user);
   }
 

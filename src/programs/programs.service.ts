@@ -14,13 +14,20 @@ import { QueryProgramDto } from './dto/query-program.dto';
 import { ManageProgramActivitiesDto } from './dto/manage-program-activities.dto';
 import { Activity, ActivityDocument } from '../activities/schemas/activity.schema';
 import { UserRole } from '../users/interfaces/user-role.enum';
+import { Enrollment, EnrollmentDocument } from '../enrollments/entity/enrollment.entity';
+
+import { UsersService } from '../users/users.service';
+import { FirebaseService } from '../common/firebase.service';
 
 @Injectable()
 export class ProgramsService {
   constructor(
     @InjectModel(Program.name) private readonly programModel: Model<ProgramDocument>,
     @InjectModel(Activity.name) private readonly activityModel: Model<ActivityDocument>,
-  ) {}
+    @InjectModel(Enrollment.name) private readonly enrollmentModel: Model<EnrollmentDocument>,
+    private readonly usersService: UsersService,
+    private readonly firebaseService: FirebaseService,
+  ) { }
 
   async create(dto: CreateProgramDto, user: any) {
     this.ensureCreatorRole(user);
@@ -85,11 +92,26 @@ export class ProgramsService {
       this.programModel.countDocuments(filter).exec(),
     ]);
 
+    // Add enrollment count for each program
+    const itemsWithEnrollments = await Promise.all(
+      items.map(async (program) => {
+        const nombreInscrits = await this.enrollmentModel
+          .countDocuments({ program: program._id })
+          .exec();
+
+        const programObj = program.toObject();
+        return {
+          ...programObj,
+          nombreInscrits,
+        };
+      })
+    );
+
     return {
       total,
       page: Number(page),
       limit: Number(limit),
-      items,
+      items: itemsWithEnrollments,
     };
   }
 
@@ -98,7 +120,18 @@ export class ProgramsService {
     if (!program) {
       throw new NotFoundException('Programme introuvable');
     }
-    return program;
+
+    // Count enrollments for this program
+    const nombreInscrits = await this.enrollmentModel
+      .countDocuments({ program: program._id })
+      .exec();
+
+    // Convert to plain object and add enrollment count
+    const programObj = program.toObject();
+    return {
+      ...programObj,
+      nombreInscrits,
+    };
   }
 
   async update(id: string, dto: UpdateProgramDto, user: any) {
@@ -123,6 +156,9 @@ export class ProgramsService {
       .populate('activites')
       .exec();
 
+    // Notify parents of enrolled children about the update
+    this.notifyParentsOfUpdate(program._id, program.nom_programme);
+
     return updated;
   }
 
@@ -142,6 +178,9 @@ export class ProgramsService {
     );
     await this.syncActivityLinks(program._id, activityIds);
 
+    // Notify parents of enrolled children about the update
+    this.notifyParentsOfUpdate(program._id, program.nom_programme);
+
     return this.findOne(id);
   }
 
@@ -157,6 +196,82 @@ export class ProgramsService {
     await this.programModel.findByIdAndDelete(program._id).exec();
 
     return { deleted: true };
+  }
+
+  private async notifyParentsOfUpdate(programId: Types.ObjectId, programName: string) {
+    try {
+      console.log(`[NOTIFICATION] Starting notification process for program: ${programName} (${programId})`);
+
+      // Find all enrollments for this program
+      const enrollments = await this.enrollmentModel.find({ program: programId }).exec();
+      console.log(`[NOTIFICATION] Found ${enrollments.length} enrollments`);
+
+      if (!enrollments.length) {
+        console.log('[NOTIFICATION] No enrollments found, skipping notifications');
+        return;
+      }
+
+      // Get unique child IDs
+      const childIds = [...new Set(enrollments.map(e => e.child.toString()))];
+      console.log(`[NOTIFICATION] Unique child IDs: ${childIds.length}`, childIds);
+
+      // Find parents of these children
+      const children = await Promise.all(childIds.map(id => this.usersService.findById(id)));
+      console.log(`[NOTIFICATION] Found ${children.length} children`);
+
+      const parentIds = new Set<string>();
+      children.forEach(child => {
+        if (child && child.parent) {
+          // Handle both ObjectId and populated User object
+          const parentId = typeof child.parent === 'object' && child.parent._id
+            ? child.parent._id.toString()
+            : child.parent.toString();
+          parentIds.add(parentId);
+          console.log(`[NOTIFICATION] Child ${child._id} has parent ${parentId}`);
+        } else {
+          console.log(`[NOTIFICATION] Child ${child?._id} has no parent`);
+        }
+      });
+
+      console.log(`[NOTIFICATION] Found ${parentIds.size} unique parents`);
+
+      if (parentIds.size === 0) {
+        console.log('[NOTIFICATION] No parents found, skipping notifications');
+        return;
+      }
+
+      // Fetch parents to get their FCM tokens
+      const parents = await Promise.all(Array.from(parentIds).map(id => this.usersService.findById(id)));
+      console.log(`[NOTIFICATION] Fetched ${parents.length} parent users`);
+
+      const tokens: string[] = [];
+      parents.forEach(parent => {
+        if (parent && parent.fcmToken) {
+          tokens.push(parent.fcmToken);
+          console.log(`[NOTIFICATION] Parent ${parent._id} has FCM token: ${parent.fcmToken.substring(0, 20)}...`);
+        } else {
+          console.log(`[NOTIFICATION] Parent ${parent?._id} has NO FCM token`);
+        }
+      });
+
+      console.log(`[NOTIFICATION] Total FCM tokens collected: ${tokens.length}`);
+
+      if (tokens.length > 0) {
+        console.log(`[NOTIFICATION] Sending notifications to ${tokens.length} parents...`);
+        await this.firebaseService.sendMulticastNotification(
+          tokens,
+          'Mise à jour du programme',
+          `Le programme "${programName}" a été mis à jour. Vérifiez les nouveaux détails !`,
+          { programId: programId.toString() }
+        );
+        console.log('[NOTIFICATION] Notifications sent successfully!');
+      } else {
+        console.log('[NOTIFICATION] No FCM tokens available, skipping notification send');
+      }
+
+    } catch (error) {
+      console.error('[NOTIFICATION] Error notifying parents:', error);
+    }
   }
 
   private ensureCreatorRole(user: any) {

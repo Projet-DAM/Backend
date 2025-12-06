@@ -15,7 +15,7 @@ import { ImageFileValidator } from '../users/validators/image-file.validator';
 @ApiBearerAuth('JWT-auth')
 @Controller('activities')
 export class ActivitiesController {
-  constructor(private readonly activitiesService: ActivitiesService) {}
+  constructor(private readonly activitiesService: ActivitiesService) { }
 
   @Post()
   @Roles(UserRole.ACADEMIE, UserRole.COACH)

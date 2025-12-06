@@ -13,7 +13,7 @@ export class UsersService {
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-  ) {}
+  ) { }
 
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
     // Vérifier si l'email existe déjà

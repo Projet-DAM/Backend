@@ -7,10 +7,14 @@ import { UsersModule } from './users/users.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { AuthModule } from './auth/auth.module';
 import { ProgramsModule } from './programs/programs.module';
+import { EnrollmentsModule } from './enrollments/enrollments.module';
+import { PaymentsModule } from './payments/payments.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
- @Module({
+import { FirebaseService } from './common/firebase.service';
+
+@Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/sportyconnect'),
@@ -30,8 +34,11 @@ import { join } from 'path';
     ActivitiesModule,
     AuthModule,
     ProgramsModule,
+    EnrollmentsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, FirebaseService],
+  exports: [FirebaseService],
 })
-export class AppModule {}
+export class AppModule { }

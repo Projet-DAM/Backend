@@ -52,7 +52,7 @@ import { ImageFileValidator } from './validators/image-file.validator';
 @Controller('users')
 @ApiBearerAuth('JWT-auth')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   private readonly logger = new Logger(UsersController.name);
 
@@ -349,7 +349,7 @@ export class UsersController {
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       // remove uploaded file if present
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       throw new PayloadTooLargeException('Fichier trop volumineux');
     }
 
@@ -374,7 +374,7 @@ export class UsersController {
     }
     if (!authorized) {
       // remove uploaded file if present
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       throw new ForbiddenException('Non autorisé à uploader cette photo');
     }
 
@@ -389,11 +389,11 @@ export class UsersController {
       const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47;
       const isWebp = header.toString('ascii', 0, 4) === 'RIFF' && header.toString('ascii', 8, 12) === 'WEBP';
       if (!isJpeg && !isPng && !isWebp) {
-        try { fs.unlinkSync((file as any).path); } catch (e) {}
+        try { fs.unlinkSync((file as any).path); } catch (e) { }
         throw new UnsupportedMediaTypeException('Type de fichier non supporté');
       }
     } catch (err) {
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       if (err instanceof UnsupportedMediaTypeException) throw err;
       throw new BadRequestException('Erreur lors de la validation du fichier');
     }
@@ -406,10 +406,37 @@ export class UsersController {
       return { success: true, photoProfil: publicUrl, user: updated };
     } catch (e) {
       // remove file on error
-      try { fs.unlinkSync((file as any).path); } catch (err2) {}
+      try { fs.unlinkSync((file as any).path); } catch (err2) { }
       this.logger.error('Error saving photo URL to user', e?.message || e);
       throw new Error('Erreur interne lors de l\'upload');
     }
+  }
+  @Patch(':id/fcm-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Mettre à jour le token FCM pour les notifications push' })
+  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        fcmToken: { type: 'string', example: 'fcm_token_string' },
+      },
+      required: ['fcmToken'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Token FCM mis à jour' })
+  async updateFcmToken(@Param('id') id: string, @Body('fcmToken') fcmToken: string, @Req() req: any) {
+    const tokenUserId = req?.user?.userId;
+    if (!req || !req.user || !tokenUserId) {
+      throw new UnauthorizedException('Token manquant ou invalide');
+    }
+
+    // Allow user to update their own token
+    if (tokenUserId !== id) {
+      throw new ForbiddenException('Vous ne pouvez mettre à jour que votre propre token FCM');
+    }
+
+    return this.usersService.update(id, { fcmToken });
   }
 }
 
