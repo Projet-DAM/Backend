@@ -1,9 +1,9 @@
-import { IsDateString, IsBoolean, IsNumber, IsString, IsOptional, IsMongoId, IsArray, Min, Max } from 'class-validator';
+import { IsString, IsBoolean, IsNumber, IsOptional, IsMongoId, IsArray, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
-//integration final 
+
 export class CreateSuiviEnfantDto {
-  @IsDateString()
-  date_suivi: Date;
+  @IsString()
+  date_suivi: String;
 
   @IsBoolean()
   presence: boolean;
