@@ -3,15 +3,14 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "target": "ES2021",
-    "lib": ["ES2021"],
+    "lib": [
+      "ES2021"
+    ],
     "rootDir": "./src",
     "outDir": "./dist",
-
     "esModuleInterop": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "useDecoratorsLegacy": true,
-
     "resolveJsonModule": true,
     "strict": false,
     "skipLibCheck": true,
@@ -19,7 +18,13 @@
     "sourceMap": true,
     "incremental": true
   },
-
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "**/*spec.ts"
+  ]
 }
