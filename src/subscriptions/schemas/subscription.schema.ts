@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { SubscriptionOption, SubscriptionOptionSchema } from './subscription-option.schema';
 
 export enum SubscriptionStatus {
   PENDING = 'PENDING',
@@ -74,6 +75,12 @@ export class Subscription {
 
   @Prop()
   notes?: string;
+
+  @Prop({ type: [], default: [] })
+  selectedOptions: any[];
+
+  @Prop({ default: false })
+  expirationWarningSent: boolean;
 
   createdAt?: Date;
   updatedAt?: Date;

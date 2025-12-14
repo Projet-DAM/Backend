@@ -52,7 +52,7 @@ describe('SubscriptionsService', () => {
 
   it('should record payment and set PAID and ACTIVE', async () => {
     const created = await service.create({ childId: 'child1', offerId: 'offer1', autoRenew: true }, { userId: 'parent1', role: UserRole.PARENT });
-    const updated = await service.recordPayment(created._id, { amount: 100, currency: 'EUR', method: 'CASH' }, { userId: 'parent1', role: UserRole.PARENT });
+    const updated = await service.recordPayment(created._id.toString(), { amount: 100, currency: 'EUR', method: 'CASH' }, { userId: 'parent1', role: UserRole.PARENT });
     expect(updated.paymentStatus).toBe('PAID');
     expect(updated.status).toBe('ACTIVE');
   });

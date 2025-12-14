@@ -1,15 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsMongoId, IsOptional } from 'class-validator';
+import { IsBoolean, IsDateString, IsMongoId, IsOptional, ValidateNested, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
+import { SubscriptionOptionDto } from './subscription-option.dto';
 
 export class CreateSubscriptionDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: '690cd9998d614e72c9b1ab55',
     description: 'ID de l\'enfant (ObjectId MongoDB - 24 caractères hexadécimaux)'
   })
   @IsMongoId({ message: 'childId doit être un ObjectId MongoDB valide (24 caractères hexadécimaux)' })
   childId: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: '690cd9998d614e72c9b1ab55',
     description: 'ID de l\'offre (ObjectId MongoDB - 24 caractères hexadécimaux)'
   })
@@ -25,6 +27,18 @@ export class CreateSubscriptionDto {
   @IsOptional()
   @IsBoolean()
   autoRenew?: boolean = false;
+
+  @ApiProperty({
+    required: false,
+    description: 'Options supplémentaires (tenue sportive, assurance, transport)',
+    example: [
+      { type: 'SPORTS_OUTFIT', price: 50, currency: 'TND', description: 'Tenue sportive complète' },
+      { type: 'INSURANCE', price: 30, currency: 'TND', description: 'Assurance accident' }
+    ]
+  })
+  @IsOptional()
+  @IsArray()
+  selectedOptions?: any[];
 }
 
 

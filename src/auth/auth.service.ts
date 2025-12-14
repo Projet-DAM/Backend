@@ -15,7 +15,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private emailService: EmailService,
-  ) {}
+  ) { }
 
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.usersService.findByEmail(email);
@@ -31,6 +31,7 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
+
 
     const payload: JwtPayload = {
       sub: user._id.toString(),
@@ -73,17 +74,36 @@ export class AuthService {
     );
 
     // Envoyer l'email avec le code
+    this.logger.log(`📧 === DÉBUT ENVOI EMAIL DE VÉRIFICATION ===`);
+    this.logger.log(`📧 Email: ${user.email}, Nom: ${user.nom}, Prénom: ${user.prenom}, Code: ${verificationCode}`);
+    this.logger.log(`📧 EmailService injecté: ${this.emailService ? 'OUI' : 'NON'}`);
+    
+    if (!this.emailService) {
+      this.logger.error('❌ ERREUR CRITIQUE: EmailService n\'est pas injecté!');
+      throw new Error('EmailService non disponible');
+    }
+    
     try {
+      this.logger.log(`📧 Appel de emailService.sendVerificationCode...`);
       await this.emailService.sendVerificationCode(
         user.email,
         user.nom,
         user.prenom,
         verificationCode,
       );
-    } catch (error) {
-      this.logger.error('Erreur lors de l\'envoi de l\'email:', error);
-      // Continuer même si l'email échoue, l'utilisateur pourra demander un nouveau code
+      this.logger.log(`✅ Email envoyé avec succès`);
+    } catch (error: any) {
+      this.logger.error('❌ === ERREUR ENVOI EMAIL ===');
+      this.logger.error('❌ Message:', error?.message || error);
+      this.logger.error('❌ Stack:', error?.stack);
+      this.logger.error('❌ Code:', error?.code);
+      this.logger.error('❌ Type:', error?.constructor?.name);
+      this.logger.error('❌ Response:', error?.response);
+      this.logger.error('❌ Command:', error?.command);
+      // NE PAS continuer silencieusement - lancer l'erreur pour voir ce qui se passe
+      // throw error; // Décommenter pour forcer l'erreur à remonter
     }
+    this.logger.log(`📧 === FIN ENVOI EMAIL ===`);
 
     // Ne pas retourner de token JWT lors de l'inscription
     // L'utilisateur devra vérifier son email avant de pouvoir se connecter
@@ -137,6 +157,30 @@ export class AuthService {
         photoProfil: user.photoProfil,
       },
     };
+  }
+
+  async testEmail(email: string, nom: string, prenom: string) {
+    this.logger.log(`🧪 === TEST ENVOI EMAIL ===`);
+    this.logger.log(`🧪 Email: ${email}, Nom: ${nom}, Prénom: ${prenom}`);
+    
+    const testCode = '123456';
+    try {
+      await this.emailService.sendVerificationCode(email, nom, prenom, testCode);
+      this.logger.log(`✅ Test email réussi`);
+      return {
+        success: true,
+        message: `Email de test envoyé avec succès à ${email}`,
+        code: testCode,
+      };
+    } catch (error: any) {
+      this.logger.error(`❌ Test email échoué:`, error);
+      return {
+        success: false,
+        message: `Erreur lors de l'envoi de l'email de test: ${error.message || error}`,
+        error: error.message || error,
+        stack: error.stack,
+      };
+    }
   }
 }
 

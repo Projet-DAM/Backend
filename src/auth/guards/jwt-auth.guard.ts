@@ -11,6 +11,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
+  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+    if (err) {
+      throw err;
+    }
+    if (!user) {
+      throw new UnauthorizedException(info?.message || 'Token invalide ou expiré');
+    }
+    return user;
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -28,12 +38,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     try {
       const isAuthenticated = await super.canActivate(context) as boolean;
-      
+
       if (!isAuthenticated) {
-        throw new UnauthorizedException('Token invalide ou expiré. Vérifiez que le token est correctement envoyé dans le header Authorization: Bearer <token>');
+        throw new UnauthorizedException(
+          'Token invalide ou expiré. Vérifiez que le token est correctement envoyé dans le header Authorization: Bearer <token>',
+        );
       }
 
-      if (!requiredRoles) {
+      if (!requiredRoles || requiredRoles.length === 0) {
         return true;
       }
 
@@ -41,15 +53,20 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       const user = request.user;
 
       if (!user) {
-        throw new UnauthorizedException('Utilisateur non authentifié. Le token n\'a pas pu être validé.');
+        throw new UnauthorizedException(
+          "Utilisateur non authentifié. Le token n'a pas pu être validé.",
+        );
       }
 
       const hasRole = requiredRoles.some((role) => user.role === role);
-      
+
       if (!hasRole) {
-        throw new ForbiddenException(`Accès refusé : rôle insuffisant. Rôle requis: ${requiredRoles.join(' ou ')}, Rôle actuel: ${user.role}`);
+        throw new ForbiddenException(
+          `Accès refusé : rôle insuffisant. Rôle requis: ${requiredRoles.join(' ou ')}, Rôle actuel: ${user.role}`,
+        );
       }
     } catch (error) {
+      // Allow standard auth exceptions to pass through
       if (error instanceof UnauthorizedException || error instanceof ForbiddenException) {
         throw error;
       }
@@ -59,4 +76,3 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return true;
   }
 }
-

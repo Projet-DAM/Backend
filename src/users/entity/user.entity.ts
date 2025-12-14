@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { UserRole } from '../interfaces/user-role.enum';
+import { SportType } from '../interfaces/sport-type.enum';
 
 export type UserDocument = User & Document;
 
@@ -20,6 +21,9 @@ export class User {
   @Prop({ required: true })
   motDePasse: string;
 
+  @Prop()
+  phoneNumber?: string;
+
   @Prop({ enum: UserRole, required: true })
   role: UserRole;
 
@@ -31,6 +35,9 @@ export class User {
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   parent?: Types.ObjectId;
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  coach?: Types.ObjectId[];
 
   // Attributs spécifiques au Coach
   @Prop({ type: [String] })
@@ -48,6 +55,8 @@ export class User {
 
   @Prop({ enum: ['M', 'F'] })
   sexe?: string;
+  @Prop({ enum: SportType })
+  sportPratique?: SportType;
 
   // Attributs spécifiques à l'Académie
   @Prop()
@@ -79,6 +88,9 @@ export class User {
 
   createdAt?: Date;
   updatedAt?: Date;
+
+  @Prop()
+  fcmToken?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -1,0 +1,175 @@
+import { Controller, Post, Req, Headers, BadRequestException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Request } from 'express';
+import type { RawBodyRequest } from '@nestjs/common';
+import Stripe from 'stripe';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { UsersService } from '../users/users.service';
+import { EmailService } from '../common/services/email.service';
+import { OffersService } from '../offers/offers.service';
+
+@Controller('payments/webhook')
+export class PaymentsWebhookController {
+    private readonly logger = new Logger(PaymentsWebhookController.name);
+    private stripe: Stripe;
+
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly subscriptionsService: SubscriptionsService,
+        private readonly usersService: UsersService,
+        private readonly emailService: EmailService,
+        private readonly offersService: OffersService,
+    ) {
+        const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+        if (secretKey) {
+            this.stripe = new Stripe(secretKey, { apiVersion: '2025-10-29.clover' });
+        }
+    }
+
+    @Post()
+    async handleWebhook(
+        @Req() req: RawBodyRequest<Request>,
+        @Headers('stripe-signature') signature: string,
+    ) {
+        this.logger.log('🔔 Webhook received!');
+        console.log('Webhook called at:', new Date().toISOString());
+
+        const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
+
+        if (!webhookSecret) {
+            this.logger.warn('⚠️ Webhook secret not configured - skipping signature verification');
+        }
+
+        let event: Stripe.Event;
+
+        try {
+            if (webhookSecret && signature) {
+                // Use raw body for signature verification
+                const rawBody = req.rawBody || req.body;
+                event = this.stripe.webhooks.constructEvent(
+                    rawBody,
+                    signature,
+                    webhookSecret,
+                );
+            } else {
+                // For testing without webhook secret
+                this.logger.warn('Processing webhook without signature verification (development mode)');
+                event = req.body as Stripe.Event;
+            }
+        } catch (err: any) {
+            this.logger.error(`❌ Webhook signature verification failed: ${err.message}`);
+            throw new BadRequestException(`Webhook Error: ${err.message}`);
+        }
+
+        this.logger.log(`📨 Received webhook event: ${event.type}`);
+
+        // Handle the event
+        switch (event.type) {
+            case 'payment_intent.succeeded':
+                await this.handlePaymentSuccess(event.data.object as Stripe.PaymentIntent);
+                break;
+            case 'payment_intent.payment_failed':
+                await this.handlePaymentFailed(event.data.object as Stripe.PaymentIntent);
+                break;
+            default:
+                this.logger.log(`ℹ️ Unhandled event type: ${event.type}`);
+        }
+
+        return { received: true };
+    }
+
+    private async handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
+        this.logger.log(`💰 Payment succeeded: ${paymentIntent.id}`);
+        console.log('PaymentIntent metadata:', paymentIntent.metadata);
+
+        // Extract metadata
+        const { childId, offerId } = paymentIntent.metadata || {};
+
+        if (!childId || !offerId) {
+            this.logger.warn('⚠️ Missing childId or offerId in payment metadata');
+            console.log('Available metadata:', paymentIntent.metadata);
+            return;
+        }
+
+        this.logger.log(`Processing payment for childId: ${childId}, offerId: ${offerId}`);
+
+        try {
+            // Get child and parent info
+            const child = await this.usersService.findById(childId);
+            if (!child || !child.parent) {
+                this.logger.error(`❌ Child not found or has no parent: ${childId}`);
+                return;
+            }
+
+            const parent = await this.usersService.findById(child.parent.toString());
+            if (!parent) {
+                this.logger.error(`❌ Parent not found: ${child.parent}`);
+                return;
+            }
+
+            this.logger.log(`✅ Found parent: ${parent.email}`);
+
+            // Get offer details
+            const offer = await this.offersService.findOne(offerId);
+            if (!offer) {
+                this.logger.error(`❌ Offer not found: ${offerId}`);
+                return;
+            }
+
+            this.logger.log(`✅ Found offer: ${offer.name}`);
+
+            // Create subscription
+            const startDate = new Date();
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + offer.durationDays);
+
+            this.logger.log(`Creating subscription...`);
+            const subscription = await this.subscriptionsService.create(
+                {
+                    childId,
+                    offerId,
+                    startDate: startDate.toISOString(),
+                    autoRenew: false,
+                },
+                { userId: parent._id.toString(), role: parent.role },
+            );
+
+            this.logger.log(`✅ Subscription created: ${subscription._id}`);
+
+            // Record payment
+            this.logger.log(`Recording payment...`);
+            await this.subscriptionsService.recordPayment(
+                subscription._id.toString(),
+                {
+                    amount: paymentIntent.amount / 100, // Convert from cents
+                    currency: paymentIntent.currency.toUpperCase(),
+                    method: 'STRIPE',
+                },
+                { userId: parent._id.toString(), role: parent.role },
+            );
+
+            this.logger.log(`✅ Payment recorded`);
+
+            // Send confirmation email
+            this.logger.log(`📧 Sending confirmation email to ${parent.email}...`);
+            await this.emailService.sendPaymentConfirmation(
+                parent.email,
+                parent.nom,
+                parent.prenom,
+                offer.name,
+                `${(paymentIntent.amount / 100).toFixed(2)} €`,
+                startDate.toLocaleDateString('fr-FR'),
+                endDate.toLocaleDateString('fr-FR'),
+            );
+
+            this.logger.log(`✅ Subscription created and email sent for child: ${childId}`);
+        } catch (error: any) {
+            this.logger.error(`❌ Error handling payment success: ${error.message}`, error.stack);
+        }
+    }
+
+    private async handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
+        this.logger.error(`❌ Payment failed: ${paymentIntent.id}`);
+        // TODO: Implement failure handling (notify user, etc.)
+    }
+}

@@ -1,39 +1,68 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import * as dotenv from 'dotenv';
 import { existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import * as express from 'express';
 
 dotenv.config();
 
 async function bootstrap() {
-  // Créer le dossier uploads s'il n'existe pas
-  const uploadsDir = './uploads';
-  if (!existsSync(uploadsDir)) {
-    mkdirSync(uploadsDir, { recursive: true });
-  }
+  // Ensure all upload directories exist
+  const uploadDirs = [
+    './uploads',
+    './uploads/messages',
+    './uploads/messages/images',
+    './uploads/messages/audio',
+    './uploads/tournois',
+  ];
 
-  const app = await NestFactory.create(AppModule);
+  uploadDirs.forEach(dir => {
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+      console.log(`Created directory: ${dir}`);
+    }
+  });
 
-  // Guard global
-  const jwtAuthGuard = app.get(JwtAuthGuard);
-  app.useGlobalGuards(jwtAuthGuard);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
 
-  // Validation globale
+  // Request logging middleware (before other middleware)
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
+
+  // Servir les fichiers statiques - MUST be before global guards
+  const uploadsPath = join(__dirname, '..', '..', 'uploads');
+  console.log(`Serving static files from: ${uploadsPath}`);
+  app.use('/uploads', express.static(uploadsPath));
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
   // CORS
-  app.enableCors();
+  app.enableCors({
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+    exposedHeaders: ['Content-Type', 'Authorization'],
+  });
 
-  // Configuration Swagger
   const config = new DocumentBuilder()
     .setTitle('SportyConnect Kids API')
     .setDescription('API REST pour la gestion des utilisateurs et authentification JWT')
@@ -49,16 +78,23 @@ async function bootstrap() {
       },
       'JWT-auth',
     )
-    .addTag('Auth', 'Endpoints d\'authentification')
-    .addTag('Users', 'Gestion des utilisateurs')
+    .addSecurityRequirements('JWT-auth')
+    .addTag('SuiviEnfant', 'Suivi des enfants')
+    .addTag('App', 'Endpoints généraux de l\'API')
+    .addTag('Tournois', 'Gestion des tournois')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
+  // Use global guard if needed (reflects Stashed logic)
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new JwtAuthGuard(reflector));
+
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://localhost:${port}`);
   console.log(`Swagger documentation: http://localhost:${port}/api`);
 }
+
 bootstrap();

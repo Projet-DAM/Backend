@@ -11,7 +11,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('Offers')
 @Controller('offers')
 export class OffersController {
-  constructor(private readonly offersService: OffersService) {}
+  constructor(private readonly offersService: OffersService) { }
 
   @Post()
   @ApiBearerAuth('JWT-auth')
@@ -29,19 +29,19 @@ export class OffersController {
     // Log pour debug
     console.log('Received DTO:', JSON.stringify(dto, null, 2));
     console.log('Request body:', JSON.stringify(req.body, null, 2));
-    
+
     // Extraire l'academyId depuis le token JWT
     const currentUserId = req.user?.userId || req.user?.sub;
     if (!currentUserId) {
       throw new ForbiddenException('Utilisateur non authentifié');
     }
-    
+
     // Ajouter automatiquement l'academyId au DTO
     const dtoWithAcademyId = {
       ...dto,
       academyId: currentUserId.toString(),
     };
-    
+
     return this.offersService.create(dtoWithAcademyId, { userId: currentUserId, role: req.user.role });
   }
 
@@ -64,17 +64,17 @@ export class OffersController {
   ) {
     const currentUserRole = req?.user?.role;
     const currentUserId = req?.user?.userId || req?.user?.sub;
-    
+
     console.log('findAll - currentUserRole:', currentUserRole);
     console.log('findAll - currentUserId:', currentUserId);
     console.log('findAll - academyId query param:', academyId);
-    
+
     // Si l'utilisateur est une académie, filtrer automatiquement par son academyId
     if (currentUserRole === UserRole.ACADEMIE && currentUserId && !academyId) {
       academyId = currentUserId.toString();
       console.log('findAll - academyId auto-assigné:', academyId);
     }
-    
+
     // Pour les parents, filtrer uniquement les offres actives
     let isActiveFilter: boolean | undefined;
     if (currentUserRole === UserRole.PARENT) {
@@ -82,7 +82,7 @@ export class OffersController {
     } else {
       isActiveFilter = typeof isActive === 'string' ? isActive === 'true' : undefined;
     }
-    
+
     const parsed: any = {
       isActive: isActiveFilter,
       academyId,
@@ -93,11 +93,38 @@ export class OffersController {
     return this.offersService.findAll(parsed);
   }
 
+  // Routes spécifiques AVANT les routes avec paramètres dynamiques
+  @Get('all-subscribers')
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.ACADEMIE, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Tous les abonnements groupés par offre (ACADEMIE|ADMIN)',
+    description: 'Retourne toutes les offres avec leurs abonnés. Vue d\'ensemble complète pour l\'académie.'
+  })
+  getAllSubscribers(@Req() req: any) {
+    const currentUserId = req.user?.userId || req.user?.sub;
+    return this.offersService.getAllSubscribersGroupedByOffer({ userId: currentUserId, role: req.user.role });
+  }
+
   @Get(':id')
   @Public()
   @ApiOperation({ summary: 'Récupérer une offre (public)' })
   findOne(@Param('id') id: string) {
     return this.offersService.findOne(id);
+  }
+
+  @Get(':id/subscribers')
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.ACADEMIE, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Liste des abonnés à une offre (ACADEMIE|ADMIN)',
+    description: 'Retourne la liste des enfants abonnés à cette offre avec détails du parent.'
+  })
+  getSubscribers(@Param('id') id: string, @Req() req: any) {
+    const currentUserId = req.user?.userId || req.user?.sub;
+    return this.offersService.getSubscribers(id, { userId: currentUserId, role: req.user.role });
   }
 
   @Patch(':id')

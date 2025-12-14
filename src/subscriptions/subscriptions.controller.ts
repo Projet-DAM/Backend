@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SubscriptionsService } from './subscriptions.service';
+import { SubscriptionOptionsService } from './subscription-options.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../users/interfaces/user-role.enum';
@@ -14,7 +15,10 @@ import { SubscriptionStatus, PaymentStatus } from './schemas/subscription.schema
 @UseGuards(JwtAuthGuard)
 @Controller('subscriptions')
 export class SubscriptionsController {
-  constructor(private readonly service: SubscriptionsService) {}
+  constructor(
+    private readonly service: SubscriptionsService,
+    private readonly optionsService: SubscriptionOptionsService,
+  ) { }
 
   @Post()
   @Roles(UserRole.PARENT)
@@ -30,6 +34,16 @@ export class SubscriptionsController {
   @ApiOperation({ summary: 'Lister mes abonnements (PARENT)' })
   mine(@Req() req: any) {
     return this.service.findMine({ userId: req.user.userId, role: req.user.role });
+  }
+
+  @Get('available-options')
+  @Roles(UserRole.PARENT, UserRole.COACH, UserRole.ACADEMIE, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtenir les options supplémentaires disponibles',
+    description: 'Retourne la liste des options disponibles (tenue sportive, assurance, transport) avec leurs prix'
+  })
+  getAvailableOptions() {
+    return this.optionsService.getAvailableOptions();
   }
 
   @Get('by-child/:childId')
@@ -71,18 +85,18 @@ export class SubscriptionsController {
 
   @Patch(':id')
   @Roles(UserRole.PARENT, UserRole.ACADEMIE, UserRole.ADMIN)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Mettre à jour un abonnement',
     description: 'Parent: peut modifier autoRenew, notes, et startDate (recalcule automatiquement endDate). Admin/Academy: peut modifier tous les champs.'
   })
-  @ApiBody({ 
-    schema: { 
-      example: { 
+  @ApiBody({
+    schema: {
+      example: {
         startDate: '2025-12-01T00:00:00.000Z',
         autoRenew: true,
         notes: 'Reporté au mois prochain'
-      } 
-    } 
+      }
+    }
   })
   update(@Param('id') id: string, @Body() dto: UpdateSubscriptionDto, @Req() req: any) {
     return this.service.update(id, dto, { userId: req.user.userId, role: req.user.role });

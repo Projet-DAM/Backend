@@ -7,6 +7,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { EmailModule } from '../common/services/email.module';
+import { JWT_SECRET, JWT_EXPIRES_IN } from './constants/jwt.constants';
 
 @Module({
   imports: [
@@ -14,9 +15,9 @@ import { EmailModule } from '../common/services/email.module';
     PassportModule,
     EmailModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'secretKey123',
-      signOptions: { 
-        expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any
+      secret: JWT_SECRET,
+      signOptions: {
+        expiresIn: JWT_EXPIRES_IN as any,
       },
     }),
   ],
