@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Fond principal gris très clair -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#F1F5F9" />
+            <corners android:radius="28dp" />
+        </shape>
+    </item>
+
+    <!-- Titre du Widget (Simulé par une barre bleue en haut à gauche) -->
+    <item android:top="20dp" android:left="20dp" android:right="160dp" android:height="12dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0E5C75" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+
+    <!-- Grande Carte Centrale (Simule le Programme Principal) -->
+    <item android:top="45dp" android:left="15dp" android:right="15dp" android:height="80dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="18dp" />
+            <stroke android:width="1dp" android:color="#E2E8F0" />
+        </shape>
+    </item>
+
+    <!-- Deux petits rectangles en bas (Simule les tuiles Tournoi/Activités) -->
+    <!-- Tuile Gauche (Bleu Sporty) -->
+    <item android:top="135dp" android:left="15dp" android:right="145dp" android:height="70dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0E5C75" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <!-- Tuile Droite (Orange Sporty) -->
+    <item android:top="135dp" android:left="145dp" android:right="15dp" android:height="70dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#F16A2D" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+
+    <!-- Bouton d'action en bas -->
+    <item android:top="215dp" android:left="40dp" android:right="40dp" android:height="30dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0E5C75" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+</layer-list>
