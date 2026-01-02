@@ -25,6 +25,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { SuiviEnfantModule } from './suivi-enfant/suivi-enfant.module';
 import { TournoiModule } from './tournoi/tournoi.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { GeminiModule } from './gemini/gemini.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { UploadsModule } from './uploads/uploads.module';
     SuiviEnfantModule,
     TournoiModule,
     UploadsModule,
+    GeminiModule,
   ],
   controllers: [AppController],
   providers: [AppService, FirebaseService],

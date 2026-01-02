@@ -532,9 +532,19 @@ export class UsersService {
     };
   }
 
-  // Récupérer les enfants d'un coach (utilisé par les coaches pour sélectionner un enfant)
+  // Récupérer tous les enfants du système (utilisé par les coaches pour sélectionner un enfant)
+  // Les coaches peuvent voir tous les enfants pour créer des suivis
   async getChildrenOfCoach(coachId: string): Promise<UserDocument[]> {
-    return this.userModel.find({ coach: coachId, role: UserRole.ENFANT }).exec();
+    // Return ALL children in the system
+    return this.userModel.find({ role: UserRole.ENFANT }).exec();
+  }
+  async findChildByName(prenom: string, nom: string): Promise<UserDocument | null> {
+    return this.userModel.findOne({
+      role: UserRole.ENFANT,
+      prenom: new RegExp(`^${prenom}$`, 'i'),
+      nom: new RegExp(`^${nom}$`, 'i'),
+    }).exec();
   }
 }
+
 

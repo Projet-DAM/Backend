@@ -5,6 +5,7 @@ export enum MessageType {
   TEXT = 'text',
   IMAGE = 'image',
   AUDIO = 'audio',
+  AI_FEEDBACK = 'ai_feedback',
 }
 
 @Schema({ timestamps: true })
@@ -22,10 +23,10 @@ export class Message {
   @Prop({ type: String, enum: MessageType, required: true })
   type: MessageType;
 
-  @Prop({ type: String, maxlength: 500, required: function() { return this.type === MessageType.TEXT; } })
+  @Prop({ type: String, maxlength: 500, required: function () { return this.type === MessageType.TEXT; } })
   content?: string; // For text messages, max 500 characters
 
-  @Prop({ type: String, required: function() { return this.type === MessageType.IMAGE || this.type === MessageType.AUDIO; } })
+  @Prop({ type: String, required: function () { return this.type === MessageType.IMAGE || this.type === MessageType.AUDIO; } })
   mediaUrl?: string; // URL to the stored image or audio file
 
   @Prop({ type: Boolean, default: false })

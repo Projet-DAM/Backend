@@ -5,6 +5,8 @@ import { MatchesController } from './matches.controller';
 import { Match, MatchSchema } from './schemas/match.schema';
 import { TournoiModule } from '../tournoi/tournoi.module';
 import { Equipe, EquipeSchema } from '../equipes/schemas/equipe.schema';
+import { UsersModule } from '../users/users.module';
+import { GeminiModule } from '../gemini/gemini.module';
 
 @Module({
   imports: [
@@ -13,9 +15,11 @@ import { Equipe, EquipeSchema } from '../equipes/schemas/equipe.schema';
       { name: Equipe.name, schema: EquipeSchema },
     ]),
     forwardRef(() => TournoiModule),
+    UsersModule,
+    GeminiModule,
   ],
   controllers: [MatchesController],
   providers: [MatchesService],
   exports: [MatchesService],
 })
-export class MatchesModule {}
+export class MatchesModule { }

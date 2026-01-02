@@ -236,6 +236,8 @@ export class SuiviEnfantService {
     if (currentUser.role === UserRole.COACH) {
       // Coaches see all suivis on their home screen.
       return this.suiviModel.find().populate('enfant').exec();
+      // Coaches see only suivis they created
+      return this.suiviModel.find({ coach: currentUser.userId }).populate('enfant').exec();
     }
 
     if (currentUser.role === UserRole.PARENT) {

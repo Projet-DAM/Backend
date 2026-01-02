@@ -8,6 +8,8 @@ import { MatchPhase } from './interfaces/match-phase.enum';
 import { MatchStatut } from './interfaces/match-statut.enum';
 import { TournoiService } from '../tournoi/tournoi.service';
 import { Equipe, EquipeDocument } from '../equipes/schemas/equipe.schema';
+import { GeminiService } from '../gemini/gemini.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class MatchesService {
@@ -17,7 +19,9 @@ export class MatchesService {
     @InjectModel(Match.name) private matchModel: Model<MatchDocument>,
     @InjectModel(Equipe.name) private equipeModel: Model<EquipeDocument>,
     private tournoiService: TournoiService,
-  ) {}
+    private geminiService: GeminiService,
+    private usersService: UsersService,
+  ) { }
 
   async create(createMatchDto: CreateMatchDto): Promise<MatchDocument> {
     const tournoi = await this.tournoiService.findById(createMatchDto.tournoiId);
@@ -182,6 +186,7 @@ export class MatchesService {
       match.statut = MatchStatut.TERMINE;
 
       await this.progressWinnerToNextMatch(match);
+      this.triggerAiFeedback(match);
     } else {
       if (updateMatchDto.statut) {
         match.statut = updateMatchDto.statut;
@@ -322,6 +327,60 @@ export class MatchesService {
     const result = await this.matchModel.findByIdAndDelete(id);
     if (!result) {
       throw new NotFoundException('Match non trouvé');
+    }
+  }
+
+  private async triggerAiFeedback(match: MatchDocument) {
+    try {
+      // Need to populate participants if not already
+      const m: any = await this.matchModel.findById(match._id)
+        .populate({ path: 'equipeA', populate: { path: 'enfants' } })
+        .populate({ path: 'equipeB', populate: { path: 'enfants' } })
+        .populate('tournoiId')
+        .exec();
+
+      if (!m || !m.equipeA || !m.equipeB) return;
+
+      const processTeam = async (team: any, result: 'victoire' | 'defaite' | 'nul') => {
+        if (!team.enfants || !Array.isArray(team.enfants)) return;
+
+        for (const inscription of team.enfants) {
+          // Find User
+          // Note: Inscription does not guarantee a User exists. We try to find by name.
+          const childUser = await this.usersService.findChildByName(inscription.enfantPrenom, inscription.enfantNom);
+
+          if (childUser) {
+            const dto = {
+              childId: childUser._id.toString(),
+              childName: inscription.enfantPrenom,
+              matchId: match._id.toString(),
+              matchResult: result,
+              teamName: team.nom,
+              score: `${m.scoreEquipeA}-${m.scoreEquipeB}`,
+              phase: m.phase,
+              tournamentName: m.tournoiId ? (m.tournoiId as any).nom : undefined
+            };
+            // Fire and forget, or await? iterating, so await is safer for rate limits but slower.
+            // Given it's a background process triggered by update, we can await.
+            await this.geminiService.sendFeedbackToConversations(dto);
+          }
+        }
+      };
+
+      const scoreA = m.scoreEquipeA;
+      const scoreB = m.scoreEquipeB;
+
+      let resA: 'victoire' | 'defaite' | 'nul' = 'nul';
+      let resB: 'victoire' | 'defaite' | 'nul' = 'nul';
+
+      if (scoreA > scoreB) { resA = 'victoire'; resB = 'defaite'; }
+      else if (scoreB > scoreA) { resA = 'defaite'; resB = 'victoire'; }
+
+      await processTeam(m.equipeA, resA);
+      await processTeam(m.equipeB, resB);
+
+    } catch (e) {
+      this.logger.error(`Error triggering AI feedback: ${e.message}`, e.stack);
     }
   }
 }

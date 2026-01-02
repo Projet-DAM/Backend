@@ -104,6 +104,8 @@ export class SuiviEnfantController {
   @Roles(UserRole.COACH)
   @ApiOperation({ summary: 'Récupérer la liste des enfants associés au coach (COACH uniquement)' })
   @ApiResponse({ status: 200, description: 'Liste des enfants du coach' })
+  @ApiOperation({ summary: 'Récupérer tous les enfants du système (COACH uniquement)' })
+  @ApiResponse({ status: 200, description: 'Liste de tous les enfants' })
   getCoachChildren(@Req() req: any) {
     return this.usersService.getChildrenOfCoach(req.user.userId);
   }

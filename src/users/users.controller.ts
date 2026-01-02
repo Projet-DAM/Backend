@@ -282,6 +282,7 @@ export class UsersController {
   }
 
   @Get('enfants')
+  @UseGuards(JwtAuthGuard)
   @Roles(UserRole.COACH, UserRole.ACADEMIE, UserRole.PARENT)
   @ApiOperation({ summary: 'Récupérer la liste compacte des enfants (Coach/Académie; Parent returns own children)' })
   @ApiResponse({ status: 200, description: 'Liste compacte des enfants' })
