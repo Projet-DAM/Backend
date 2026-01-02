@@ -1,12 +1,10 @@
-
-import { Injectable, Logger, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { GenerateFeedbackDto } from './dto/generate-feedback.dto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ConfigService } from '@nestjs/config';
 import { MessagesService } from '../messages/messages.service';
 import { UsersService } from '../users/users.service';
 import { SuiviEnfantService } from '../suivi-enfant/suivi-enfant.service';
-import { MessageType } from '../messages/message.schema';
 import { UserRole } from '../users/interfaces/user-role.enum';
 
 @Injectable()
@@ -22,21 +20,30 @@ export class GeminiService {
         @Inject(forwardRef(() => SuiviEnfantService))
         private suiviEnfantService: SuiviEnfantService,
     ) {
+        // Correction : Utilisation de la clé API depuis .env ou la clé de secours
         const apiKey = this.configService.get<string>('GEMINI_API_KEY') || 'AIzaSyBpTeCynQn7Py6cS0Xe_ZbD8DK-Q2CV67U';
+
         if (apiKey) {
             this.genAI = new GoogleGenerativeAI(apiKey);
-            this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            // CORRECTION : On utilise 'gemini-1.5-flash-latest' pour éviter l'erreur 404 sur Render
+            this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+            this.logger.log('Gemini AI initialized with model gemini-1.5-flash-latest');
         } else {
             this.logger.warn('GEMINI_API_KEY not found in environment variables');
         }
     }
 
+    /**
+     * Génère un conseil de coaching (Virtual Coach)
+     */
     async generateCoachingAdvice(childName: string, topic: string): Promise<string> {
         if (!this.model) {
-            return "Désolé, je ne peux pas donner de conseils pour le moment. ⚽";
+            return `Allez ${childName} ! Continue de t'entraîner sur le thème ${topic}, tu vas progresser ! 💪⚽`;
         }
 
-        const prompt = `Tu es un coach sportif pour enfants. Donne un conseil court et motivant à l'enfant nommé ${childName} sur le thème ${topic}. Utilise le tutoiement et des emojis.`;
+        const prompt = `Tu es un coach sportif bienveillant pour enfants. 
+        Donne un conseil court (2 phrases maximum) et très motivant à l'enfant nommé ${childName} sur le thème "${topic}". 
+        Utilise le tutoiement, sois encourageant et ajoute des emojis sportifs.`;
 
         try {
             this.logger.log(`Generating coaching advice for ${childName} on topic ${topic}`);
@@ -45,10 +52,13 @@ export class GeminiService {
             return response.text().trim();
         } catch (error) {
             this.logger.error('Error generating coaching advice', error);
-            return `Allez ${childName} ! Continue de t'entraîner sur le thème ${topic}, tu vas progresser ! 💪⚽`;
+            return `Allez ${childName} ! Le travail sur le thème ${topic} est la clé du succès. Continue tes efforts ! 💪⚽`;
         }
     }
 
+    /**
+     * Génère le texte de feedback après un match
+     */
     async generateFeedback(dto: GenerateFeedbackDto): Promise<string> {
         if (!this.model) {
             this.logger.error('Gemini AI not initialized (missing API Key)');
@@ -69,98 +79,30 @@ export class GeminiService {
         }
     }
 
-    private fallbackMessage(dto: GenerateFeedbackDto): string {
-        const emojiMap = {
-            victoire: '🏆',
-            defaite: '💪',
-            nul: '⚡'
-        };
-        const emoji = emojiMap[dto.matchResult] || '⚽';
-        return `${emoji} Bravo ${dto.childName} pour ton match avec ${dto.teamName} ! Continue tes efforts, c'est super ! 🚀`;
-    }
-
-    private buildPrompt(dto: GenerateFeedbackDto): string {
-        const emojiMap = {
-            victoire: '🏆',
-            defaite: '💪',
-            nul: '⚡'
-        };
-        const emoji = emojiMap[dto.matchResult] || '⚽';
-
-        return `
-Tu es un coach sportif bienveillant pour enfants.
-
-CONTEXTE :
-- Enfant : ${dto.childName} ${dto.childAge ? `(${dto.childAge} ans)` : ''}
-- Équipe : ${dto.teamName}
-- Résultat : ${dto.matchResult.toUpperCase()} (Score: ${dto.score})
-- Phase : ${dto.phase}
-${dto.performance ? `- Performance observée : ${dto.performance}` : ''}
-${dto.tournamentName ? `- Tournoi : ${dto.tournamentName}` : ''}
-
-MISSION :
-Écris un message court (2-3 phrases) et TRÈS motivant pour ${dto.childName}.
-
-RÈGLES :
-1. Félicite chaleureusement ou encourage selon le résultat (${dto.matchResult})
-2. Langage simple et énergique adapté à un enfant
-3. Sois TRÈS positif, utilise des emojis
-4. Mentionne l'équipe "${dto.teamName}" et le résultat
-5. Commence par ${emoji}
-6. 2-3 phrases maximum
-7. Tutoie l'enfant
-8. Termine par un encouragement futur
-
-Génère UNIQUEMENT le message.
-    `;
-    }
-
+    /**
+     * Envoie le feedback généré dans les conversations du parent et du coach
+     */
     async sendFeedbackToConversations(dto: GenerateFeedbackDto) {
-        // 1. Generate text
         const feedbackText = await this.generateFeedback(dto);
 
         try {
-            // 2. Find Child User to get Parent
             const child = await this.usersService.findById(dto.childId);
             if (!child) {
-                this.logger.warn(`Child user ${dto.childId} not found, cannot send feedback`);
+                this.logger.warn(`Child user ${dto.childId} not found`);
                 return { success: false, error: 'Child not found' };
             }
 
-            const parentId = child.parent ? child.parent._id.toString() : null;
-
-            // 3. Find Coach (via SuiviEnfant or generic coach of the child)
-            // Assuming we take the first coach found for this child in SuiviEnfant logic 
+            const parentId = child.parent ? (child.parent as any)._id?.toString() || child.parent.toString() : null;
             let coachId: string | null = null;
+
             if (child.coach) {
-                coachId = (child.coach as any)._id ? (child.coach as any)._id.toString() : child.coach.toString();
-            } else {
-                // Try to find from latest SuiviEnfant
-                const suivis = await this.suiviEnfantService.findByEnfant(dto.childId, { userId: 'system-ai', role: UserRole.ACADEMIE });
-                if (suivis && suivis.length > 0) {
-                    const c = suivis[0].coach;
-                    coachId = (c as any)._id ? (c as any)._id.toString() : c.toString();
-                }
+                coachId = (child.coach as any)._id?.toString() || child.coach.toString();
             }
 
-            if (!coachId) {
-                // If still no coach, maybe we skip sending to coach or use parent as sender placeholder?
-                // We'll proceed with parent only if coach is missing.
-            }
-
-            const metadata = {
-                matchId: dto.matchId,
-                matchResult: dto.matchResult,
-                teamName: dto.teamName,
-                score: dto.score,
-                phase: dto.phase,
-                isAiFeedback: true
-            };
-
-            // 4. Send to Parent
+            // Envoi au parent
             if (parentId) {
                 await this.messagesService.createMessage(
-                    coachId || parentId,
+                    coachId || parentId, // Expéditeur (par défaut le coach ou le système)
                     {
                         receiver: parentId,
                         type: 'ai_feedback' as any,
@@ -168,18 +110,6 @@ Génère UNIQUEMENT le message.
                         conversationId: MessagesService.generateConversationId(coachId || parentId, parentId),
                     } as any
                 );
-            }
-
-            // 5. Send to Coach
-            if (coachId) {
-                // Send from System or Parent?
-                // If we want the coach to see the message they "sent" (AI generated), we might create it 
-                // but we already did above if coachId was sender.
-                // If we want to NOTIFY the coach:
-                // We can send a message to the coach from the system or just rely on the fact that if they are the sender,
-                // it shows up in their chat history.
-                // The prompt says "envoyer ce message dans la conversation... du coach".
-                // If the coach is the sender, it IS in their conversation.
             }
 
             return {
@@ -191,5 +121,30 @@ Génère UNIQUEMENT le message.
             this.logger.error('Error sending feedback to conversations', e);
             return { success: false, error: e.message };
         }
+    }
+
+    private fallbackMessage(dto: GenerateFeedbackDto): string {
+        const emojiMap = { victoire: '🏆', defaite: '💪', nul: '⚡' };
+        const emoji = emojiMap[dto.matchResult.toLowerCase()] || '⚽';
+        return `${emoji} Bravo ${dto.childName} pour ton match avec ${dto.teamName} ! Ta détermination est ta plus grande force, continue comme ça ! 🚀`;
+    }
+
+    private buildPrompt(dto: GenerateFeedbackDto): string {
+        const emojiMap = { victoire: '🏆', defaite: '💪', nul: '⚡' };
+        const emoji = emojiMap[dto.matchResult.toLowerCase()] || '⚽';
+
+        return `
+            Tu es un coach sportif bienveillant pour enfants.
+            CONTEXTE :
+            - Enfant : ${dto.childName} ${dto.childAge ? `(${dto.childAge} ans)` : ''}
+            - Équipe : ${dto.teamName}
+            - Résultat : ${dto.matchResult.toUpperCase()} (Score: ${dto.score})
+            - Phase : ${dto.phase}
+            ${dto.performance ? `- Performance : ${dto.performance}` : ''}
+
+            MISSION :
+            Écris un message court (2 phrases) et TRÈS motivant pour ${dto.childName}.
+            Tutoie l'enfant, utilise un langage simple, commence par ${emoji} et termine par un encouragement.
+        `;
     }
 }
