@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirmation d'abonnement</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(180deg, #4A90E2 0%, #357ABD 100%);
+      min-height: 100vh;
+      padding: 30px 15px;
+      line-height: 1.6;
+    }
+    
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #FFFFFF;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    
+    .header {
+      background: linear-gradient(180deg, #4A90E2 0%, #5BA3F5 100%);
+      padding: 32px 24px;
+      text-align: center;
+      position: relative;
+    }
+    
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 20px;
+      background: #FFFFFF;
+      border-radius: 20px 20px 0 0;
+    }
+    
+    .header-icon {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+    
+    .checkmark {
+      width: 36px;
+      height: 36px;
+      border: 3px solid white;
+      border-radius: 50%;
+      position: relative;
+    }
+    
+    .checkmark::after {
+      content: '';
+      position: absolute;
+      left: 9px;
+      top: 4px;
+      width: 9px;
+      height: 16px;
+      border: solid white;
+      border-width: 0 3px 3px 0;
+      transform: rotate(45deg);
+    }
+    
+    .header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #FFFFFF;
+    }
+    
+    .header p {
+      font-size: 15px;
+      color: rgba(255, 255, 255, 0.95);
+    }
+    
+    .content {
+      padding: 32px 24px;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .greeting {
+      font-size: 20px;
+      color: #2C3E50;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+    
+    .message {
+      color: #5A6C7D;
+      margin-bottom: 24px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    
+    .details-card {
+      background: #F8FAFB;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      border: 1px solid #E8EEF2;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid #E8EEF2;
+    }
+    
+    .detail-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    
+    .detail-row:first-child {
+      padding-top: 0;
+    }
+    
+    .detail-label {
+      font-size: 13px;
+      color: #7A8A99;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .detail-value {
+      font-size: 16px;
+      color: #2C3E50;
+      font-weight: 700;
+      text-align: right;
+    }
+    
+    .highlight {
+      color: #4A90E2;
+    }
+    
+    .info-box {
+      background: #FFF8E1;
+      border-left: 4px solid #FF9800;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    
+    .info-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    
+    .info-box p {
+      color: #8D6E63;
+      font-size: 14px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    
+    .footer {
+      background: #F5F7FA;
+      padding: 28px 24px;
+      text-align: center;
+      border-top: 1px solid #E8EEF2;
+    }
+    
+    .footer-title {
+      color: #2C3E50;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    
+    .footer p {
+      color: #7A8A99;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    
+    .contact-info {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #E8EEF2;
+    }
+    
+    .social-links {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .social-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      background: #4A90E2;
+      color: white;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 16px;
+      transition: all 0.2s ease;
+    }
+    
+    .social-link:hover {
+      background: #357ABD;
+      transform: translateY(-2px);
+    }
+    
+    .copyright {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #E8EEF2;
+      font-size: 12px;
+      color: #9CA8B3;
+    }
+    
+    @media (max-width: 600px) {
+      body {
+        padding: 20px 10px;
+      }
+      
+      .header {
+        padding: 28px 20px;
+      }
+      
+      .content {
+        padding: 28px 20px;
+      }
+      
+      .detail-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      
+      .detail-value {
+        text-align: left;
+      }
+      
+      .footer {
+        padding: 24px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <div style="margin-bottom: 15px;">
+         <img src="cid:logo" alt="Sporty KIDS" style="width: 120px; height: auto;">
+      </div>
+      <div class="header-icon">
+        <div class="checkmark"></div>
+      </div>
+      <h1>Abonnement Confirmé !</h1>
+      <p>Merci pour votre confiance</p>
+    </div>
+    
+    <div class="content">
+      <h2 class="greeting">Bonjour {{ prenom }} {{ nom }},</h2>
+      <p class="message">
+        Nous sommes ravis de vous compter parmi nous ! Votre abonnement a été activé avec succès et vous pouvez dès maintenant profiter de tous ses avantages.
+      </p>
+      
+      <div class="details-card">
+        <div class="detail-row">
+          <span class="detail-label">Type d'abonnement</span>
+          <span class="detail-value highlight">{{ type }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Montant payé</span>
+          <span class="detail-value">{{ price }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Date de début</span>
+          <span class="detail-value">{{ dateStart }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Date de fin</span>
+          <span class="detail-value">{{ dateEnd }}</span>
+        </div>
+      </div>
+      
+      <div class="info-box">
+        <span class="info-icon">💡</span>
+        <p><strong>Conseil important :</strong> Conservez précieusement cet email. Il contient toutes les informations essentielles concernant votre abonnement.</p>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p class="footer-title">Besoin d'aide ?</p>
+      <p>Notre équipe support est disponible 7j/7</p>
+      
+      <div class="contact-info">
+        <p>📧 support@sportykids.com</p>
+        <p>📞 +33 1 23 45 67 89</p>
+      </div>
+      
+      <div class="social-links">
+        <a href="#" class="social-link" title="Facebook">f</a>
+        <a href="#" class="social-link" title="Twitter">𝕏</a>
+        <a href="#" class="social-link" title="Instagram">📷</a>
+        <a href="#" class="social-link" title="LinkedIn">in</a>
+      </div>
+      
+      <p class="copyright">
+        © 2024 Sporty KIDS. Tous droits réservés.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+
+
+

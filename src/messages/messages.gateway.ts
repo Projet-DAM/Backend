@@ -35,7 +35,7 @@ export class MessagesGateway {
     @Inject(forwardRef(() => MessagesService)) private readonly messagesService: MessagesService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   async handleConnection(@ConnectedSocket() client: AuthenticatedSocket) {
     const token = client.handshake.headers.authorization?.split(' ')[1];

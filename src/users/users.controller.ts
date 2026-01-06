@@ -23,7 +23,9 @@ import {
   UnsupportedMediaTypeException,
   HttpCode,
   HttpStatus,
+  Request,
 } from '@nestjs/common';
+import { Roles } from '../common/decorators/roles.decorator';
 import { Types } from 'mongoose';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -219,6 +221,7 @@ export class UsersController {
     return this.transformUserForResponse(user);
   }
 
+
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Récupérer les utilisateurs (avec filtres optionnels)' })
@@ -280,6 +283,7 @@ export class UsersController {
     }
     return this.transformUsersForResponse(users);
   }
+
 
   @Get('enfants')
   @UseGuards(JwtAuthGuard)
@@ -373,6 +377,7 @@ export class UsersController {
 
     return this.transformUserForResponse(user);
   }
+
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
@@ -522,6 +527,116 @@ export class UsersController {
       }
     }
 
+    return this.usersService.remove(id);
+  }
+
+
+
+  @Post(':id/link-child')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Lier un enfant à un parent' })
+  @ApiParam({ name: 'id', description: 'ID du parent (MongoDB ObjectId)' })
+  @ApiBody({ type: LinkChildDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Enfant lié avec succès',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Erreur de validation ou ID invalide',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'childId doit être un ID MongoDB valide',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({
+    description: 'Accès refusé : rôle insuffisant (Parent requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiResponse({ status: 200, description: 'Enfant lié avec succès' })
+  @ApiResponse({ status: 404, description: 'Parent ou enfant non trouvé' })
+  @ApiResponse({ status: 400, description: 'Erreur de validation' })
+  @ApiResponse({ status: 403, description: 'Accès refusé' })
+  linkChild(@Param('id') id: string, @Body('childId') childId: string, @Request() req) {
+    const currentUserRole = req.user?.role;
+    if (currentUserRole !== UserRole.PARENT) {
+      throw new ForbiddenException('Seuls les parents peuvent lier des enfants');
+    }
+    return this.usersService.linkChild(id, childId);
+  }
+
+
+  @Get(':parentId/children/:childId')
+  @Roles(UserRole.PARENT)
+  @ApiOperation({ summary: 'Récupérer un enfant spécifique avec vérification d\'appartenance' })
+  @ApiParam({ name: 'parentId', description: 'ID du parent (MongoDB ObjectId)' })
+  @ApiParam({ name: 'childId', description: 'ID de l\'enfant (MongoDB ObjectId)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Enfant trouvé',
+    type: UserResponseDto
+  })
+  @ApiBadRequestResponse({
+    description: 'ID invalide ou enfant n\'appartient pas au parent',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Cet enfant n\'appartient pas à ce parent',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token JWT manquant ou invalide',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Token invalide ou expiré',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  @ApiForbiddenResponse({
+    description: 'Accès refusé : rôle insuffisant (Parent requis)',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'Accès refusé : rôle insuffisant',
+        error: 'Forbidden'
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Parent ou enfant non trouvé',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Parent ou enfant non trouvé',
+        error: 'Not Found'
+      }
+    }
+  })
+  getChildData(@Param('parentId') parentId: string, @Param('childId') childId: string) {
+    return this.usersService.getChildData(parentId, childId);
     await this.usersService.remove(decoded);
     return { success: true, id: decoded };
   }
@@ -554,6 +669,9 @@ export class UsersController {
       throw err;
     }
   }
+
+
+
 
   @Post(':id/upload-photo')
   @UseGuards(JwtAuthGuard)

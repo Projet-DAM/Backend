@@ -22,6 +22,18 @@ export class CreateUserDto {
   @IsString()
   prenom: string;
 
+  @ApiProperty({ example: 'jean.dupont@example.com', description: 'Adresse email (optionnel pour les enfants)' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiProperty({ example: 'password123', description: 'Mot de passe (minimum 6 caractères, optionnel pour les enfants)', minLength: 6 })
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  motDePasse?: string;
+
+
   @ApiProperty({
     example: 'jean.dupont@example.com',
     description: 'Adresse email',
@@ -63,6 +75,11 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   photoProfil?: string;
+
+  @ApiProperty({ example: '+33612345678', description: 'Numéro de téléphone', required: false })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
 
   // Attributs spécifiques au Coach
   @ApiProperty({

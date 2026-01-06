@@ -40,6 +40,11 @@ export class UpdateUserDto {
   @IsString()
   photoProfil?: string;
 
+  @ApiProperty({ example: '+33612345678', description: 'Numéro de téléphone', required: false })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
   // Attributs spécifiques au Coach
   @ApiProperty({
     example: ['Certification FIFA', 'Diplôme Entraîneur'],
@@ -80,8 +85,8 @@ export class UpdateUserDto {
   @IsDateString()
   dateNaissance?: string;
 
-  @ApiProperty({ 
-    example: 'M', 
+  @ApiProperty({
+    example: 'M',
     description: 'Sexe de l\'enfant (M ou F)',
     required: false,
     enum: ['M', 'F']

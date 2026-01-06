@@ -10,10 +10,19 @@ export enum OfferType {
 
 export type OfferDocument = Offer & Document;
 
-@Schema({ timestamps: true })
+@Schema({
+  timestamps: true,
+  toJSON: {
+    virtuals: true,
+    transform: (doc, ret: any) => {
+      ret.id = ret._id?.toString() || ret.id;
+      // Ne pas supprimer _id pour compatibilité
+      return ret;
+    },
+  },
+  toObject: { virtuals: true },
+})
 export class Offer {
-  _id: Types.ObjectId;
-
   @Prop({ required: true })
   name: string;
 
@@ -41,11 +50,18 @@ export class Offer {
   @Prop({ type: Types.ObjectId, ref: 'User', index: true, required: true })
   academyId: Types.ObjectId;
 
+  @Prop({ default: 0 })
+  maxCapacity: number;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export const OfferSchema = SchemaFactory.createForClass(Offer);
+
+OfferSchema.virtual('id').get(function (this: any) {
+  return this._id?.toHexString ? this._id.toHexString() : this._id?.toString();
+});
 
 
 

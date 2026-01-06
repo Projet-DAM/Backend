@@ -41,7 +41,17 @@ export const TransactionSchema = SchemaFactory.createForClass(Transaction);
 
 export type SubscriptionDocument = Subscription & Document;
 
-@Schema({ timestamps: true })
+@Schema({
+  timestamps: true,
+  toJSON: {
+    virtuals: true,
+    transform: (doc, ret: any) => {
+      ret.id = ret._id?.toString() || ret.id;
+      return ret;
+    },
+  },
+  toObject: { virtuals: true },
+})
 export class Subscription {
   _id: Types.ObjectId;
 
@@ -75,11 +85,21 @@ export class Subscription {
   @Prop()
   notes?: string;
 
+  @Prop({ type: [], default: [] })
+  selectedOptions: any[];
+
+  @Prop({ default: false })
+  expirationWarningSent: boolean;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export const SubscriptionSchema = SchemaFactory.createForClass(Subscription);
+
+SubscriptionSchema.virtual('id').get(function (this: any) {
+  return this._id?.toHexString ? this._id.toHexString() : this._id?.toString();
+});
 
 
 

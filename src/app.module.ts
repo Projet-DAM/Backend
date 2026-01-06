@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -20,6 +21,17 @@ import { InscriptionModule } from './inscriptions/inscription.module';
 import { MatchesModule } from './matches/matches.module';
 import { MessagesModule } from './messages/messages.module';
 import { NotificationModule } from './notifications/notification.module';
+import { SubscriptionOptionsModule } from './subscription-options/subscription-options.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    ScheduleModule.forRoot(),
 import { OffersModule } from './offers/offers.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { SuiviEnfantModule } from './suivi-enfant/suivi-enfant.module';
@@ -56,6 +68,9 @@ import { GeminiModule } from './gemini/gemini.module';
     MatchesModule,
     MessagesModule,
     NotificationModule,
+    SubscriptionOptionsModule,
+    ChatbotModule,
+    AnalyticsModule,
     OffersModule,
     SubscriptionsModule,
     SuiviEnfantModule,
@@ -67,4 +82,5 @@ import { GeminiModule } from './gemini/gemini.module';
   providers: [AppService, FirebaseService],
   exports: [FirebaseService],
 })
+export class AppModule { }
 export class AppModule { }

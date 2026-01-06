@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SubscriptionsService } from './subscriptions.service';
+import { ForecastService } from './forecast.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../users/interfaces/user-role.enum';
@@ -14,7 +15,10 @@ import { SubscriptionStatus, PaymentStatus } from './schemas/subscription.schema
 @UseGuards(JwtAuthGuard)
 @Controller('subscriptions')
 export class SubscriptionsController {
-  constructor(private readonly service: SubscriptionsService) {}
+  constructor(
+    private readonly service: SubscriptionsService,
+    private readonly forecastService: ForecastService,
+  ) { }
 
   @Post()
   @Roles(UserRole.PARENT)
@@ -59,7 +63,33 @@ export class SubscriptionsController {
     @Query('sort') sort?: string,
     @Req() req?: any,
   ) {
-    return this.service.findAll({ status, paymentStatus, parentId, childId, page: page ? parseInt(page, 10) : undefined, limit: limit ? parseInt(limit, 10) : undefined, sort }, { userId: req.user.userId, role: req.user.role });
+    const userId = req?.user?.userId || req?.user?.sub;
+    const role = req?.user?.role;
+
+    if (!userId || !role) {
+      throw new Error('User authentication data is missing');
+    }
+
+    return this.service.findAll(
+      {
+        status,
+        paymentStatus,
+        parentId,
+        childId,
+        page: page ? parseInt(page, 10) : 1,
+        limit: limit ? parseInt(limit, 10) : 10,
+        sort
+      },
+      { userId, role }
+    );
+  }
+
+  @Get('forecast/revenue')
+  @Roles(UserRole.ACADEMIE, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Prévisions de revenus (ACADEMIE|ADMIN)' })
+  async getRevenueForecast(@Req() req: any) {
+    const academyId = req.user.role === UserRole.ACADEMIE ? req.user.userId : undefined;
+    return this.forecastService.generateRevenueForecast(academyId);
   }
 
   @Get(':id')
@@ -71,18 +101,18 @@ export class SubscriptionsController {
 
   @Patch(':id')
   @Roles(UserRole.PARENT, UserRole.ACADEMIE, UserRole.ADMIN)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Mettre à jour un abonnement',
     description: 'Parent: peut modifier autoRenew, notes, et startDate (recalcule automatiquement endDate). Admin/Academy: peut modifier tous les champs.'
   })
-  @ApiBody({ 
-    schema: { 
-      example: { 
+  @ApiBody({
+    schema: {
+      example: {
         startDate: '2025-12-01T00:00:00.000Z',
         autoRenew: true,
         notes: 'Reporté au mois prochain'
-      } 
-    } 
+      }
+    }
   })
   update(@Param('id') id: string, @Body() dto: UpdateSubscriptionDto, @Req() req: any) {
     return this.service.update(id, dto, { userId: req.user.userId, role: req.user.role });
@@ -124,5 +154,4 @@ export class SubscriptionsController {
     return this.service.renew(id, { userId: req.user.userId, role: req.user.role });
   }
 }
-
 

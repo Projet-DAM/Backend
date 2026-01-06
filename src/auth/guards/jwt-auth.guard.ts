@@ -33,6 +33,23 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true;
     }
 
+    try {
+      // First check authentication (JWT validity)
+      const isAuthenticated = await super.canActivate(context) as boolean;
+      if (!isAuthenticated) {
+        throw new UnauthorizedException('Token invalide ou expiré');
+      }
+    } catch (err) {
+      throw new UnauthorizedException('Token invalide ou expiré');
+    }
+
+    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (!requiredRoles) {
+      return true;
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -70,6 +87,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const hasRole = requiredRoles.some((role) => user.role === role);
 
     if (!hasRole) {
+      throw new ForbiddenException(`Accès refusé : rôle insuffisant. Rôle requis: ${requiredRoles.join(' ou ')}`);
       throw new ForbiddenException(
         `Accès refusé : rôle insuffisant. Rôle requis: ${requiredRoles.join(
           ' ou ',

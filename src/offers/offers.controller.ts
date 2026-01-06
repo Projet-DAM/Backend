@@ -11,7 +11,17 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiTags('Offers')
 @Controller('offers')
 export class OffersController {
-  constructor(private readonly offersService: OffersService) {}
+  constructor(private readonly offersService: OffersService) { }
+
+  @Get('all-subscribers')
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.ACADEMIE, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Liste de tous les inscrits groupés par offre' })
+  getAllSubscribers(@Req() req: any) {
+    const currentUserId = req.user?.userId || req.user?.sub;
+    return this.offersService.getAllSubscribers({ userId: currentUserId, role: req.user.role });
+  }
 
   @Post()
   @ApiBearerAuth('JWT-auth')
@@ -29,19 +39,19 @@ export class OffersController {
     // Log pour debug
     console.log('Received DTO:', JSON.stringify(dto, null, 2));
     console.log('Request body:', JSON.stringify(req.body, null, 2));
-    
+
     // Extraire l'academyId depuis le token JWT
     const currentUserId = req.user?.userId || req.user?.sub;
     if (!currentUserId) {
       throw new ForbiddenException('Utilisateur non authentifié');
     }
-    
+
     // Ajouter automatiquement l'academyId au DTO
     const dtoWithAcademyId = {
       ...dto,
       academyId: currentUserId.toString(),
     };
-    
+
     return this.offersService.create(dtoWithAcademyId, { userId: currentUserId, role: req.user.role });
   }
 
@@ -64,17 +74,17 @@ export class OffersController {
   ) {
     const currentUserRole = req?.user?.role;
     const currentUserId = req?.user?.userId || req?.user?.sub;
-    
+
     console.log('findAll - currentUserRole:', currentUserRole);
     console.log('findAll - currentUserId:', currentUserId);
     console.log('findAll - academyId query param:', academyId);
-    
+
     // Si l'utilisateur est une académie, filtrer automatiquement par son academyId
     if (currentUserRole === UserRole.ACADEMIE && currentUserId && !academyId) {
       academyId = currentUserId.toString();
       console.log('findAll - academyId auto-assigné:', academyId);
     }
-    
+
     // Pour les parents, filtrer uniquement les offres actives
     let isActiveFilter: boolean | undefined;
     if (currentUserRole === UserRole.PARENT) {
@@ -82,7 +92,7 @@ export class OffersController {
     } else {
       isActiveFilter = typeof isActive === 'string' ? isActive === 'true' : undefined;
     }
-    
+
     const parsed: any = {
       isActive: isActiveFilter,
       academyId,

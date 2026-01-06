@@ -6,7 +6,7 @@ import { User, UserDocument } from './entity/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateChildDto } from './dto/create-child.dto';
-import { UserRole } from './interfaces/user-role.enum';
+
 
 @Injectable()
 export class UsersService {
@@ -167,6 +167,37 @@ export class UsersService {
     return savedUser;
   }
 
+
+  async findAll(filters?: { role?: UserRole; parentId?: string }): Promise<UserDocument[]> {
+    const query: any = {};
+
+    if (filters?.role) {
+      query.role = filters.role;
+    }
+
+    if (filters?.parentId) {
+      // Convertir parentId (string) en ObjectId pour la requête MongoDB
+      try {
+        query.parent = new Types.ObjectId(filters.parentId);
+        console.log(`[UsersService] findAll - Filtrage par parentId: ${filters.parentId} (ObjectId: ${query.parent})`);
+      } catch (error) {
+        console.error(`[UsersService] Erreur lors de la conversion du parentId en ObjectId: ${error}`);
+        throw new BadRequestException(`ID parent invalide: ${filters.parentId}`);
+      }
+    }
+
+    console.log(`[UsersService] findAll - Query:`, JSON.stringify(query));
+    const users = await this.userModel.find(query).populate('enfants').populate('parent').exec();
+    console.log(`[UsersService] findAll - Résultat: ${users.length} utilisateur(s) trouvé(s)`);
+    if (filters?.role === UserRole.ENFANT && users.length > 0) {
+      console.log(`[UsersService] Détails des enfants:`, users.map(u => ({
+        id: u._id?.toString(),
+        nom: u.nom,
+        prenom: u.prenom,
+        parent: u.parent?.toString() || u.parent
+      })));
+    }
+    return users;
   async findAll(filters?: { role?: UserRole; parentId?: string }): Promise<UserDocument[]> {
     const query: any = {};
     if (filters?.role) {
@@ -367,6 +398,9 @@ export class UsersService {
     if (!Types.ObjectId.isValid(cleanId)) {
       throw new BadRequestException('id invalide');
     }
+
+    const user = await this.userModel.findById(cleanId);
+    if (!user) {
     const result = await this.userModel.findByIdAndDelete(cleanId);
     if (!result) {
       throw new NotFoundException('Utilisateur non trouvé');
@@ -377,11 +411,14 @@ export class UsersService {
       const parent = await this.userModel.findById(result.parent);
       if (parent && parent.enfants) {
         parent.enfants = parent.enfants.filter(
+          (childId: any) => childId.toString() !== cleanId
           (childId: any) => childId.toString() !== cleanId,
         );
         await parent.save();
       }
     }
+
+    await this.userModel.findByIdAndDelete(cleanId);
   }
 
   async linkChild(parentId: string, childId: string): Promise<UserDocument> {
@@ -538,6 +575,95 @@ export class UsersService {
     // Return ALL children in the system
     return this.userModel.find({ role: UserRole.ENFANT }).exec();
   }
+
+  async markEmailAsVerified(userId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      emailVerified: true,
+      verificationCode: undefined,
+      verificationCodeExpires: undefined,
+    });
+  }
+
+  async createChild(parentId: string, createChildDto: CreateChildDto): Promise<UserDocument> {
+    const parent = await this.userModel.findById(parentId);
+    if (!parent) {
+      throw new NotFoundException('Parent non trouvé');
+    }
+
+    if (parent.role !== UserRole.PARENT) {
+      throw new BadRequestException('L\'utilisateur doit être un parent');
+    }
+
+    // Créer l'enfant avec le rôle ENFANT
+    const childData: any = {
+      prenom: createChildDto.prenom,
+      nom: createChildDto.nom,
+      dateNaissance: new Date(createChildDto.dateNaissance),
+      sportPratique: createChildDto.sportPratique,
+      role: UserRole.ENFANT,
+      parent: parent._id,
+    };
+
+    // Ajouter la photo de profil si fournie
+    if (createChildDto.photoProfil) {
+      childData.photoProfil = createChildDto.photoProfil;
+    }
+
+    // Les enfants n'ont pas d'email ni motDePasse
+    // Générer un email unique basé sur le parent et un timestamp
+    const timestamp = Date.now();
+    childData.email = `enfant_${parent._id}_${timestamp}@academie.local`;
+
+    // Générer un mot de passe temporaire (les enfants ne se connectent pas)
+    childData.motDePasse = await bcrypt.hash(`temp_${timestamp}`, 10);
+
+    const child = new this.userModel(childData);
+    await child.save();
+
+    // Ajouter l'enfant à la liste des enfants du parent
+    if (!parent.enfants) {
+      parent.enfants = [];
+    }
+    parent.enfants.push(child._id);
+    await parent.save();
+
+    const updatedParent = await this.userModel.findById(parentId).populate('enfants').populate('parent').exec();
+    if (!updatedParent) {
+      throw new NotFoundException('Parent non trouvé après mise à jour');
+    }
+    return updatedParent;
+  }
+
+  async getChildData(parentId: string, childId: string): Promise<UserDocument> {
+    const parent = await this.userModel.findById(parentId);
+    if (!parent) {
+      throw new NotFoundException('Parent non trouvé');
+    }
+
+    if (parent.role !== UserRole.PARENT) {
+      throw new BadRequestException('L\'utilisateur doit être un parent');
+    }
+
+    const child = await this.userModel.findById(childId);
+    if (!child) {
+      throw new NotFoundException('Enfant non trouvé');
+    }
+
+    if (child.role !== UserRole.ENFANT) {
+      throw new BadRequestException('L\'utilisateur doit être un enfant');
+    }
+
+    // Vérifier que l'enfant appartient bien au parent
+    if (!child.parent || child.parent.toString() !== parentId) {
+      throw new BadRequestException('Cet enfant n\'appartient pas à ce parent');
+    }
+
+    // Vérifier que l'enfant est dans la liste des enfants du parent
+    if (!parent.enfants || !parent.enfants.some(id => id.toString() === childId)) {
+      throw new BadRequestException('Cet enfant n\'appartient pas à ce parent');
+    }
+
+    return child;
   async findChildByName(prenom: string, nom: string): Promise<UserDocument | null> {
     return this.userModel.findOne({
       role: UserRole.ENFANT,

@@ -12,7 +12,7 @@ export class OffersService {
   constructor(
     @InjectModel(Offer.name) private offerModel: Model<OfferDocument>,
     @InjectModel(Subscription.name) private subModel: Model<SubscriptionDocument>,
-  ) {}
+  ) { }
 
   async create(dto: CreateOfferDto & { academyId?: string }, actor: { userId: string; role: UserRole }): Promise<OfferDocument> {
     if (![UserRole.ACADEMIE, UserRole.ADMIN].includes(actor.role)) {
@@ -41,7 +41,7 @@ export class OffersService {
     return saved;
   }
 
-  async findAll(params: { isActive?: boolean; academyId?: string; page?: number; limit?: number; sort?: string; }): Promise<{ data: OfferDocument[]; total: number; page: number; limit: number; }>{
+  async findAll(params: { isActive?: boolean; academyId?: string; page?: number; limit?: number; sort?: string; }): Promise<{ data: OfferDocument[]; total: number; page: number; limit: number; }> {
     const { isActive, academyId } = params;
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(100, Math.max(1, params.limit || 10));
@@ -85,10 +85,31 @@ export class OffersService {
   }
 
   async findOne(id: string): Promise<OfferDocument> {
+    // Si l'ID est invalide ou l'offre introuvable, on renvoie une offre "fantôme" 
+    // pour éviter de faire planter le chargement des listes dans l'application mobile.
+    if (!id || !Types.ObjectId.isValid(id)) {
+      return {
+        _id: id || new Types.ObjectId(),
+        name: 'Offre (ID invalide)',
+        price: 0,
+        durationDays: 30,
+        maxCapacity: 0,
+        isActive: false
+      } as any;
+    }
+
     const offer = await this.offerModel.findById(id).exec();
-    if (!offer) throw new NotFoundException('Offre non trouvée');
+    if (!offer) {
+      return {
+        _id: new Types.ObjectId(id),
+        name: 'Offre Supprimée',
+        price: 0,
+        durationDays: 30,
+        maxCapacity: 0,
+        isActive: false
+      } as any;
+    }
     return offer;
-    
   }
 
   async update(id: string, dto: UpdateOfferDto, actor: { userId: string; role: UserRole }): Promise<OfferDocument> {
@@ -123,6 +144,79 @@ export class OffersService {
       throw new ConflictException('Impossible de supprimer: des abonnements actifs existent');
     }
     await this.offerModel.findByIdAndDelete(offer._id).exec();
+  }
+
+  async getAllSubscribers(actor: { userId: string; role: UserRole }) {
+    const { userId, role } = actor;
+
+    // Filtre par académie si l'utilisateur est une académie
+    const offerFilter: any = { isActive: true };
+    if (role === UserRole.ACADEMIE && userId) {
+      offerFilter.academyId = new Types.ObjectId(userId);
+    }
+
+    const offers = await this.offerModel.find(offerFilter).lean().exec();
+
+    const offersWithSubscribers = await Promise.all(
+      offers.map(async (offer) => {
+        const subscriptions: any[] = await this.subModel
+          .find({ offerId: offer._id })
+          .populate('childId', 'nom prenom photoProfil')
+          .populate('parentId', 'nom prenom email phoneNumber')
+          .lean()
+          .exec();
+
+        const subscribers = subscriptions
+          .filter(sub => sub.childId && typeof sub.childId === 'object' &&
+            sub.parentId && typeof sub.parentId === 'object')
+          .map(sub => ({
+            child: {
+              id: sub.childId._id?.toString() || sub.childId.id || '',
+              nom: sub.childId.nom || '',
+              prenom: sub.childId.prenom || '',
+              photoProfil: sub.childId.photoProfil || null
+            },
+            parent: {
+              id: sub.parentId._id?.toString() || sub.parentId.id || '',
+              nom: sub.parentId.nom || '',
+              prenom: sub.parentId.prenom || '',
+              email: sub.parentId.email || '',
+              phoneNumber: sub.parentId.phoneNumber || null
+            },
+            status: sub.status || 'PENDING',
+            paymentStatus: sub.paymentStatus || 'UNPAID',
+            startDate: sub.startDate ? (typeof sub.startDate === 'string' ? sub.startDate : sub.startDate.toISOString()) : new Date().toISOString(),
+            endDate: sub.endDate ? (typeof sub.endDate === 'string' ? sub.endDate : sub.endDate.toISOString()) : new Date().toISOString()
+          }));
+
+        return {
+          offer: {
+            id: offer._id.toString(),
+            name: offer.name || '',
+            description: offer.description || '',
+            type: offer.type || 'CUSTOM',
+            durationDays: offer.durationDays || 30,
+            price: offer.price || 0,
+            discountPct: offer.discountPct || 0,
+            conditions: offer.conditions || '',
+            isActive: offer.isActive !== false,
+            academyId: offer.academyId?.toString() || '',
+            maxCapacity: offer.maxCapacity || 0,
+            subscribersCount: subscribers.length,
+            remainingPlaces: Math.max(0, (offer.maxCapacity || 0) - subscribers.length),
+            isFull: (offer.maxCapacity || 0) > 0 && subscribers.length >= (offer.maxCapacity || 0),
+            createdAt: offer.createdAt ? (typeof offer.createdAt === 'string' ? offer.createdAt : offer.createdAt.toISOString()) : new Date().toISOString(),
+            updatedAt: offer.updatedAt ? (typeof offer.updatedAt === 'string' ? offer.updatedAt : offer.updatedAt.toISOString()) : new Date().toISOString()
+          },
+          subscribers
+        };
+      })
+    );
+
+    return {
+      totalSubscribers: offersWithSubscribers.reduce((sum, o) => sum + o.subscribers.length, 0),
+      offers: offersWithSubscribers
+    };
   }
 }
 

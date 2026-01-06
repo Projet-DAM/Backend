@@ -44,6 +44,11 @@ export class CreateOfferDto {
   @IsOptional()
   isActive?: boolean = true;
 
+  @ApiProperty({ default: 0 })
+  @IsNumber()
+  @IsOptional()
+  maxCapacity?: number = 0;
+
   // academyId ne doit PAS être dans le DTO
   // Il sera ajouté automatiquement par le controller depuis le token JWT
 }
