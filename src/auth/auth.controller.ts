@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import {
   ApiTags,
@@ -35,8 +34,8 @@ export class AuthController {
           prenom: 'Luc',
           email: 'parent@example.com',
           motDePasse: 'parentpass',
-          role: 'parent'
-        }
+          role: 'parent',
+        },
       },
       coachRegistration: {
         summary: 'Register as a coach',
@@ -47,10 +46,10 @@ export class AuthController {
           motDePasse: 'coachpass',
           role: 'coach',
           specialite: 'Football',
-          certification: ['Certification FIFA']
-        }
-      }
-    }
+          certification: ['Certification FIFA'],
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 201,
@@ -63,19 +62,15 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
-  @ApiResponse({ status: 400, description: 'Rôle invalide (seuls parent et coach peuvent s\'inscrire)' })
-
   @ApiBadRequestResponse({
-  @ApiBadRequestResponse({ 
     description: 'Données invalides',
     schema: {
       example: {
         statusCode: 400,
         message: ['email must be an email', 'motDePasse must be longer than or equal to 6 characters'],
-        error: 'Bad Request'
-      }
-    }
+        error: 'Bad Request',
+      },
+    },
   })
   @ApiConflictResponse({
     description: 'Email déjà utilisé',
@@ -83,9 +78,9 @@ export class AuthController {
       example: {
         statusCode: 409,
         message: 'Cet email est déjà utilisé',
-        error: 'Conflict'
-      }
-    }
+        error: 'Conflict',
+      },
+    },
   })
   register(@Body() createUserDto: CreateUserDto) {
     return this.authService.register(createUserDto);
@@ -100,13 +95,13 @@ export class AuthController {
     examples: {
       parentLogin: {
         summary: 'Parent login',
-        value: { email: 'parent@example.com', motDePasse: 'parentpass' }
+        value: { email: 'parent@example.com', motDePasse: 'parentpass' },
       },
       coachLogin: {
         summary: 'Coach login',
-        value: { email: 'coach@example.com', motDePasse: 'coachpass' }
-      }
-    }
+        value: { email: 'coach@example.com', motDePasse: 'coachpass' },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
@@ -119,9 +114,9 @@ export class AuthController {
       example: {
         statusCode: 400,
         message: ['email must be an email', 'motDePasse should not be empty'],
-        error: 'Bad Request'
-      }
-    }
+        error: 'Bad Request',
+      },
+    },
   })
   @ApiUnauthorizedResponse({
     description: 'Email ou mot de passe incorrect',
@@ -129,9 +124,9 @@ export class AuthController {
       example: {
         statusCode: 401,
         message: 'Email ou mot de passe incorrect',
-        error: 'Unauthorized'
-      }
-    }
+        error: 'Unauthorized',
+      },
+    },
   })
   login(@Body() loginUserDto: LoginUserDto) {
     return this.authService.login(loginUserDto);

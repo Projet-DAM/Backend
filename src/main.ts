@@ -1,34 +1,19 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import * as dotenv from 'dotenv';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import * as express from 'express';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 dotenv.config();
 
 async function bootstrap() {
-  const uploadsDir = './uploads';
-  if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
+  const logger = new Logger('Bootstrap');
 
-  const tournoisUploadsDir = './uploads/tournois';
-  if (!existsSync(tournoisUploadsDir)) mkdirSync(tournoisUploadsDir, { recursive: true });
-
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
-    prefix: '/uploads/',
-  });
-
-  app.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
-  });
   // Ensure upload directories exist
   const uploadDirs = [
     join(process.cwd(), 'uploads'),
@@ -41,7 +26,7 @@ async function bootstrap() {
   uploadDirs.forEach((dir) => {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
-      console.log(`Created directory: ${dir}`);
+      logger.log(`Created directory: ${dir}`);
     }
   });
 
@@ -57,8 +42,18 @@ async function bootstrap() {
 
   // Serve static files
   const uploadsPath = join(process.cwd(), 'uploads');
-  console.log(`Serving static files from: ${uploadsPath}`);
   app.use('/uploads', express.static(uploadsPath));
+  app.useStaticAssets(uploadsPath, {
+    prefix: '/uploads/',
+  });
+
+  // CORS
+  app.enableCors({
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+  });
 
   // Validation
   app.useGlobalPipes(
@@ -70,13 +65,9 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
-  app.enableCors({
-    origin: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    credentials: true,
-  });
+  // Global Guards
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new JwtAuthGuard(reflector));
 
   // Swagger
   const config = new DocumentBuilder()
@@ -93,26 +84,16 @@ async function bootstrap() {
       },
       'JWT-auth',
     )
-    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
-
-  const reflector = app.get(Reflector);
-  app.useGlobalGuards(new JwtAuthGuard(reflector));
-
   const port = Number(process.env.PORT) || 5000;
-  await app.listen(port, '127.0.0.1');
-
-
-  console.log(`🚀 API running on http://localhost:${port}`);
-  console.log(`📚 Swagger: http://localhost:${port}/api`);
-  const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
-  console.log(`Application running on: http://localhost:${port}`);
-  console.log(`Swagger docs: http://localhost:${port}/api`);
+
+  logger.log(`🚀 API running on http://localhost:${port}`);
+  logger.log(`📚 Swagger: http://localhost:${port}/api`);
+  logger.log(`Serving static files from: ${uploadsPath}`);
 }
 
 bootstrap();

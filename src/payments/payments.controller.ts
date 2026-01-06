@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards, HttpCode, HttpStatus, BadRequestException, Req } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, HttpCode, HttpStatus, BadRequestException, Req, Headers } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { PaymentsService } from './payments.service';
@@ -9,12 +9,14 @@ import { OffersService } from '../offers/offers.service';
 import { UsersService } from '../users/users.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EmailService } from '../common/services/email.service';
+import type { Request } from 'express';
+import Stripe from 'stripe';
 
 @Controller('payments')
 @ApiTags('Payments')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth('JWT-auth')
 export class PaymentsController {
+  private stripe: Stripe;
+
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly offersService: OffersService,
@@ -22,66 +24,48 @@ export class PaymentsController {
     private readonly usersService: UsersService,
     private readonly subscriptionsService: SubscriptionsService,
     private readonly emailService: EmailService,
-  ) { }
+  ) {
+    this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY') || process.env.STRIPE_SECRET_KEY || '', {
+      apiVersion: '2024-12-18.acacia',
+    } as any);
+  }
 
   @Post('create-intent')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Créer un PaymentIntent Stripe' })
-  @ApiResponse({
-    status: 201,
-    description: 'PaymentIntent créé avec succès',
-    schema: {
-      example: {
-        clientSecret: 'pi_1234567890_secret_abc123',
-        paymentIntentId: 'pi_1234567890',
-        publishableKey: 'pk_test_...',
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Données invalides' })
-  @ApiResponse({ status: 401, description: 'Non autorisé' })
+  @ApiResponse({ status: 201, description: 'PaymentIntent créé avec succès' })
   async createPaymentIntent(@Body() createPaymentIntentDto: CreatePaymentIntentDto) {
     let { amount, currency, paymentMethodId, subscriptionId, childId, offerId, phoneNumber } = createPaymentIntentDto;
 
-    // If childId and offerId are provided, fetch the offer to get the amount
     if (childId && offerId) {
-      // Récupérer l'enfant pour obtenir le parentId
       const child = await this.usersService.findById(childId);
       if (!child || !child.parent) {
         throw new BadRequestException('Enfant non trouvé ou sans parent');
       }
-      const parentId = typeof child.parent === 'object' && child.parent !== null && '_id' in child.parent 
-        ? String(child.parent._id) 
+      const parentId = typeof child.parent === 'object' && child.parent !== null && '_id' in child.parent
+        ? String(child.parent._id)
         : String(child.parent);
 
-      // Validation que le parent n'a pas déjà un abonnement actif pour cette offre
-      // (Un parent peut avoir plusieurs abonnements actifs mais pas pour la même offre)
       await this.subscriptionsService.validateParentSubscriptionForOffer(parentId, offerId);
 
       const offer = await this.offersService.findOne(offerId);
       if (!offer) {
         throw new BadRequestException('Offre non trouvée');
       }
-      // Calculate amount in cents from offer price
       amount = Math.round(offer.price * 100);
       subscriptionId = undefined;
 
-      // Update parent's phone number if provided
       if (phoneNumber) {
         try {
-          const child = await this.usersService.findById(childId);
-          if (child && child.parent) {
-            const parentId = child.parent.toString();
-            // Update user with phone number
-            await this.usersService.update(parentId, { phoneNumber } as any);
-          }
+          await this.usersService.update(parentId, { phoneNumber } as any);
         } catch (error) {
           console.error('Error updating phone number:', error);
         }
       }
     }
 
-    // Validate that we have an amount
     if (!amount || amount < 1) {
       throw new BadRequestException('Montant invalide. Fournissez soit amount, soit childId et offerId.');
     }
@@ -105,20 +89,10 @@ export class PaymentsController {
   }
 
   @Post('confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirmer un paiement Stripe' })
-  @ApiResponse({
-    status: 200,
-    description: 'Paiement confirmé avec succès',
-    schema: {
-      example: {
-        status: 'succeeded',
-        paymentIntentId: 'pi_1234567890',
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Erreur lors de la confirmation' })
-  @ApiResponse({ status: 401, description: 'Non autorisé' })
   async confirmPayment(@Body() confirmPaymentDto: ConfirmPaymentDto) {
     const { paymentIntentId, paymentMethodId } = confirmPaymentDto;
     if (!paymentIntentId) {
@@ -128,25 +102,10 @@ export class PaymentsController {
   }
 
   @Post('complete')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Compléter un paiement et créer l\'abonnement' })
-  @ApiResponse({
-    status: 200,
-    description: 'Paiement complété, abonnement créé et email envoyé',
-    schema: {
-      example: {
-        success: true,
-        subscription: {
-          id: 'sub_123',
-          status: 'ACTIVE',
-          paymentStatus: 'PAID',
-        },
-        emailSent: true,
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Erreur lors du traitement' })
-  @ApiResponse({ status: 401, description: 'Non autorisé' })
   async completePayment(
     @Body() body: { paymentIntentId: string; childId: string; offerId: string },
     @Req() req: any,
@@ -155,14 +114,12 @@ export class PaymentsController {
     const currentUserId = req.user?.userId || req.user?.sub;
 
     try {
-      // Verify payment intent succeeded
       const paymentIntent = await this.paymentsService.getPaymentIntent(paymentIntentId);
 
       if (paymentIntent.status !== 'succeeded') {
         throw new BadRequestException('Le paiement n\'a pas encore réussi');
       }
 
-      // Get child and parent info
       const child = await this.usersService.findById(childId);
       if (!child || !child.parent) {
         throw new BadRequestException('Enfant non trouvé ou sans parent');
@@ -173,18 +130,15 @@ export class PaymentsController {
         throw new BadRequestException('Parent non trouvé');
       }
 
-      // Verify current user is the parent
       if (parent._id.toString() !== currentUserId) {
         throw new BadRequestException('Non autorisé');
       }
 
-      // Get offer details
       const offer = await this.offersService.findOne(offerId);
       if (!offer) {
         throw new BadRequestException('Offre non trouvée');
       }
 
-      // Create subscription
       const startDate = new Date();
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + offer.durationDays);
@@ -199,26 +153,20 @@ export class PaymentsController {
         { userId: parent._id.toString(), role: parent.role },
       );
 
-      // Record payment
       await this.subscriptionsService.recordPayment(
         subscription._id.toString(),
         {
-          amount: paymentIntent.amount / 100, // Convert from cents
+          amount: paymentIntent.amount / 100,
           currency: paymentIntent.currency.toUpperCase(),
           method: 'STRIPE',
         },
         { userId: parent._id.toString(), role: parent.role },
       );
 
-      // Send confirmation email
       let emailSent = false;
       let emailError = null;
 
-      console.log('📧 ========== DÉBUT ENVOI EMAIL ==========');
-      console.log('📧 Email destinataire:', parent.email);
-
       try {
-        console.log('📧 Appel de emailService.sendPaymentConfirmation...');
         await this.emailService.sendPaymentConfirmation(
           parent.email,
           `${parent.prenom} ${parent.nom}`,
@@ -229,14 +177,10 @@ export class PaymentsController {
           endDate,
         );
         emailSent = true;
-        console.log('✅ Email envoyé avec succès !');
       } catch (error: any) {
         emailError = error.message;
-        console.error('❌ ========== ERREUR ENVOI EMAIL ==========');
-        console.error('❌ Message:', error.message);
+        console.error('Error sending email:', error.message);
       }
-
-      console.log('📧 ========== FIN ENVOI EMAIL ==========');
 
       return {
         success: true,
@@ -255,75 +199,37 @@ export class PaymentsController {
       throw error;
     }
   }
-import { Body, Controller, Post, Headers, RawBodyRequest, Req, BadRequestException } from '@nestjs/common';
-import { PaymentsService } from './payments.service';
-import type { Request } from 'express';
-import Stripe from 'stripe';
 
-@Controller('payments')
-export class PaymentsController {
-    private stripe: Stripe;
+  @Post('webhook')
+  @ApiOperation({ summary: 'Webhook Stripe pour les événements de paiement' })
+  async handleWebhook(
+    @Headers('stripe-signature') signature: string,
+    @Req() request: Request,
+  ) {
+    const endpointSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET') || process.env.STRIPE_WEBHOOK_SECRET;
 
-    constructor(private readonly paymentsService: PaymentsService) {
-        this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-            apiVersion: '2024-12-18.acacia',
-        } as any);
+    if (!endpointSecret) {
+      throw new BadRequestException('STRIPE_WEBHOOK_SECRET missing');
     }
 
-    @Post('create-payment-intent')
-    async createPaymentIntent(@Body() body: {
-        amount: number;
-        currency?: string;
-        phoneNumber?: string;
-    }) {
-        return this.paymentsService.createPaymentIntent(
-            body.amount,
-            body.currency,
-            body.phoneNumber,
-        );
+    let event: Stripe.Event;
+
+    try {
+      const rawBody = (request as any).rawBody;
+      if (!rawBody) {
+        throw new BadRequestException('Request body missing');
+      }
+
+      event = this.stripe.webhooks.constructEvent(
+        rawBody,
+        signature,
+        endpointSecret,
+      );
+    } catch (err) {
+      console.error('Webhook signature verification failed.', err.message);
+      throw new BadRequestException(`Webhook Error: ${err.message}`);
     }
 
-    @Post('confirm-payment')
-    async confirmPayment(@Body() body: { paymentIntentId: string }) {
-        return this.paymentsService.confirmPayment(body.paymentIntentId);
-    }
-
-    /**
-     * Webhook Stripe pour gérer les événements de paiement
-     * IMPORTANT: Configurez ce webhook dans votre dashboard Stripe
-     */
-    @Post('webhook')
-    async handleWebhook(
-        @Headers('stripe-signature') signature: string,
-        @Req() request: Request,
-    ) {
-        const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-        if (!endpointSecret) {
-            throw new BadRequestException('STRIPE_WEBHOOK_SECRET is not set');
-        }
-
-        let event: Stripe.Event;
-
-        try {
-            // Vérifier que le webhook provient bien de Stripe
-            const rawBody = (request as any).rawBody;
-
-            if (!rawBody) {
-                throw new BadRequestException('Request body is missing');
-            }
-
-            event = this.stripe.webhooks.constructEvent(
-                rawBody,
-                signature,
-                endpointSecret,
-            );
-        } catch (err) {
-            console.error('⚠️  Webhook signature verification failed.', err.message);
-            throw new BadRequestException(`Webhook Error: ${err.message}`);
-        }
-
-        // Traiter l'événement
-        return this.paymentsService.handleWebhook(event);
-    }
+    return this.paymentsService.handleWebhook(event);
+  }
 }

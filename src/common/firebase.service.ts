@@ -1,109 +1,133 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { ConfigService } from '@nestjs/config';
 import * as path from 'path';
 
+type TopicPayload = Omit<admin.messaging.Message, 'token' | 'tokens' | 'topic' | 'condition'>;
+
 @Injectable()
 export class FirebaseService {
+    private readonly logger = new Logger(FirebaseService.name);
+    private app?: admin.app.App;
+
     constructor(private configService: ConfigService) {
-        // Initialize Firebase Admin SDK
+        this.initialize();
+    }
+
+    private initialize(): void {
+        if (admin.apps.length) {
+            this.app = admin.app();
+            this.logger.log('[FIREBASE] Firebase Admin SDK already initialized');
+            return;
+        }
+
+        // Try environment variables first
+        const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
+        const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
+        const privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY')?.replace(/\\n/g, '\n');
+
+        if (projectId && clientEmail && privateKey) {
+            try {
+                this.app = admin.initializeApp({
+                    credential: admin.credential.cert({
+                        projectId,
+                        clientEmail,
+                        privateKey,
+                    }),
+                });
+                this.logger.log('[FIREBASE] Firebase initialized successfully via env variables');
+                return;
+            } catch (error) {
+                this.logger.error('[FIREBASE] Failed to initialize via env variables', error.stack);
+            }
+        }
+
+        // Fallback to service account file
         const serviceAccountPath = this.configService.get<string>('FIREBASE_SERVICE_ACCOUNT_PATH') || './firebase-service-account.json';
-
         try {
-            // Resolve to absolute path
             const absolutePath = path.resolve(process.cwd(), serviceAccountPath);
-            console.log(`[FIREBASE] Attempting to load service account from: ${absolutePath}`);
-
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const serviceAccount = require(absolutePath);
-
-            if (!admin.apps.length) {
-                admin.initializeApp({
+            if (require('fs').existsSync(absolutePath)) {
+                const serviceAccount = require(absolutePath);
+                this.app = admin.initializeApp({
                     credential: admin.credential.cert(serviceAccount),
                 });
-                console.log('[FIREBASE] Firebase Admin SDK initialized successfully');
+                this.logger.log(`[FIREBASE] Firebase initialized successfully via file: ${absolutePath}`);
             } else {
-                console.log('[FIREBASE] Firebase Admin SDK already initialized');
+                this.logger.warn(`[FIREBASE] Service account file not found at ${absolutePath}`);
             }
         } catch (error) {
-            console.error('[FIREBASE] Failed to initialize Firebase Admin SDK:', error.message);
-            console.error('[FIREBASE] Push notifications will not work. Please check your firebase-service-account.json file.');
+            this.logger.error('[FIREBASE] Failed to initialize via service account file', error.message);
         }
     }
 
-    async sendPushNotification(token: string, title: string, body: string, data: any = {}, imageUrl?: string, channelId: string = 'general') {
-        if (!token) return;
+    isEnabled(): boolean {
+        return !!this.app;
+    }
 
-        // Ensure all data values are strings
+    async sendPushNotification(token: string, title: string, body: string, data: any = {}, imageUrl?: string, channelId: string = 'general') {
+        if (!this.app || !token) return;
+
         const stringData = Object.keys(data).reduce((acc, key) => {
             acc[key] = String(data[key]);
             return acc;
         }, {});
 
-        // Add rich notification fields to data payload
         stringData['title'] = title;
         stringData['body'] = body;
         if (imageUrl) stringData['image'] = imageUrl;
         stringData['channel_id'] = channelId;
 
         try {
-            await admin.messaging().send({
-                token: token,
-                notification: {
-                    title: title,
-                    body: body,
-                },
+            await admin.messaging(this.app).send({
+                token,
+                notification: { title, body },
                 data: stringData,
             });
-            console.log(`[FIREBASE] Push notification sent to ${token.substring(0, 10)}... (Channel: ${channelId})`);
+            this.logger.log(`[FIREBASE] Push notification sent to ${token.substring(0, 10)}...`);
         } catch (error) {
-            console.error('[FIREBASE] Error sending push notification:', error);
+            this.logger.error('[FIREBASE] Error sending push notification', error);
         }
     }
 
-    async sendMulticastNotification(tokens: string[], title: string, body: string, data: any = {}, imageUrl?: string, channelId: string = 'general'): Promise<string[]> {
-        if (!tokens || tokens.length === 0) return [];
+    async sendToTopic(topic: string, message: TopicPayload): Promise<void> {
+        if (!this.app) {
+            this.logger.warn('[FIREBASE] Firebase not initialized. Cannot send to topic.');
+            return;
+        }
+        await admin.messaging(this.app).send({
+            ...message,
+            topic,
+        });
+    }
 
-        // Ensure all data values are strings
+    async sendMulticastNotification(tokens: string[], title: string, body: string, data: any = {}, imageUrl?: string, channelId: string = 'general'): Promise<string[]> {
+        if (!this.app || !tokens || tokens.length === 0) return [];
+
         const stringData = Object.keys(data).reduce((acc, key) => {
             acc[key] = String(data[key]);
             return acc;
         }, {});
 
-        // Add rich notification fields to data payload
         stringData['title'] = title;
         stringData['body'] = body;
         if (imageUrl) stringData['image'] = imageUrl;
         stringData['channel_id'] = channelId;
 
         const failedTokens: string[] = [];
-
         try {
-            const message = {
-                notification: {
-                    title: title,
-                    body: body
-                },
+            const response = await admin.messaging(this.app).sendEachForMulticast({
+                notification: { title, body },
                 data: stringData,
-                tokens: tokens
-            };
-
-            const response = await admin.messaging().sendEachForMulticast(message);
-            console.log(`[FIREBASE] ${response.successCount} messages sent successfully (Channel: ${channelId})`);
-
+                tokens,
+            });
             if (response.failureCount > 0) {
                 response.responses.forEach((resp, idx) => {
-                    if (!resp.success) {
-                        failedTokens.push(tokens[idx]);
-                        console.error(`[FIREBASE] Failure for token ${tokens[idx]}:`, resp.error);
-                    }
+                    if (!resp.success) failedTokens.push(tokens[idx]);
                 });
-                console.log('[FIREBASE] List of tokens that caused failures: ' + failedTokens);
             }
         } catch (error) {
-            console.error('[FIREBASE] Error sending multicast notification:', error);
+            this.logger.error('[FIREBASE] Error sending multicast notification', error);
         }
-
         return failedTokens;
     }
 }
