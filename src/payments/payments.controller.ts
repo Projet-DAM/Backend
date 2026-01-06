@@ -30,7 +30,7 @@ export class PaymentsController {
     } as any);
   }
 
-  @Post('create-intent')
+  @Post('create-payment-intent')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.CREATED)
