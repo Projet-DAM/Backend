@@ -15,7 +15,7 @@ export class SuiviEnfantController {
   constructor(
     private readonly suiviEnfantService: SuiviEnfantService,
     private readonly usersService: UsersService,
-  ) {}
+  ) { }
 
 
   @Get('available-coaches')
@@ -42,6 +42,7 @@ export class SuiviEnfantController {
 
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.COACH)
   @ApiOperation({ summary: 'Créer un suivi pour un enfant (COACH uniquement)' })
@@ -72,6 +73,7 @@ export class SuiviEnfantController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   @Roles(UserRole.PARENT, UserRole.COACH, UserRole.ACADEMIE)
   @ApiOperation({ summary: 'Lister tous les suivis (PARENT, COACH, ACADEMIE)' })
   @ApiResponse({ status: 200, description: 'Liste des suivis' })
@@ -80,6 +82,7 @@ export class SuiviEnfantController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   @Roles(UserRole.PARENT, UserRole.COACH, UserRole.ACADEMIE)
   @ApiOperation({ summary: 'Obtenir un suivi par son id (PARENT, COACH, ACADEMIE)' })
   @ApiResponse({ status: 200, description: 'Détails du suivi' })
@@ -88,6 +91,7 @@ export class SuiviEnfantController {
   }
 
   @Get('enfant/:enfantId')
+  @UseGuards(JwtAuthGuard)
   @Roles(UserRole.PARENT, UserRole.COACH, UserRole.ACADEMIE)
   @ApiOperation({ summary: 'Lister tous les suivis d\'un enfant donné (PARENT, COACH, ACADEMIE)' })
   @ApiResponse({ status: 200, description: 'Liste des suivis de l\'enfant' })
@@ -96,14 +100,18 @@ export class SuiviEnfantController {
   }
 
   @Get('coach/children')
+  @UseGuards(JwtAuthGuard)
   @Roles(UserRole.COACH)
   @ApiOperation({ summary: 'Récupérer la liste des enfants associés au coach (COACH uniquement)' })
   @ApiResponse({ status: 200, description: 'Liste des enfants du coach' })
+  @ApiOperation({ summary: 'Récupérer tous les enfants du système (COACH uniquement)' })
+  @ApiResponse({ status: 200, description: 'Liste de tous les enfants' })
   getCoachChildren(@Req() req: any) {
     return this.usersService.getChildrenOfCoach(req.user.userId);
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.COACH, UserRole.PARENT)
   @ApiOperation({ summary: 'Mettre à jour un suivi (COACH or PARENT)' })
@@ -111,7 +119,7 @@ export class SuiviEnfantController {
   @ApiResponse({ status: 403, description: 'Accès refusé' })
   async update(@Param('id') id: string, @Body() dto: UpdateSuiviEnfantDto, @Req() req: any) {
     // Allow only specific fields to be updated
-    const allowed = ['date_suivi','presence','performance','commentaire','focusAreas','nextSessionGoals'];
+    const allowed = ['date_suivi', 'presence', 'performance', 'commentaire', 'focusAreas', 'nextSessionGoals'];
     const updatePayload: any = {};
     for (const k of allowed) {
       if ((dto as any)[k] !== undefined) updatePayload[k] = (dto as any)[k];
@@ -123,6 +131,7 @@ export class SuiviEnfantController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.COACH)
   @ApiOperation({ summary: 'Supprimer un suivi (COACH uniquement)' })

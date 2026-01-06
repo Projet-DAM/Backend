@@ -1,4 +1,3 @@
-import { UserRole } from './interfaces/user-role.enum';
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -199,6 +198,48 @@ export class UsersService {
       })));
     }
     return users;
+  async findAll(filters?: { role?: UserRole; parentId?: string }): Promise<UserDocument[]> {
+    const query: any = {};
+    if (filters?.role) {
+      query.role = filters.role;
+    }
+    if (filters?.parentId) {
+      // If parentId is provided, we might need to check 'parent' field or 'createdBy' depending on logic
+      // But typically for 'findAll' with parentId, it means "children of this parent"
+      // However, existing logic in controller seems to handle permissions.
+      // Let's assume we filter by 'parent' field if it's an ENFANT role search
+      if (filters.role === UserRole.ENFANT) {
+        query.parent = filters.parentId;
+      }
+    }
+
+    return this.userModel
+      .find(query)
+      .populate('enfants')
+      .populate('parent')
+      .populate('coach')
+      .exec();
+  }
+
+  async updateVerificationCode(userId: string, code: string, expiresAt: Date): Promise<void> {
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        verificationCode: code,
+        verificationCodeExpires: expiresAt
+      }
+    );
+  }
+
+  async markEmailAsVerified(userId: string): Promise<void> {
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        emailVerified: true,
+        verificationCode: null,
+        verificationCodeExpires: null
+      }
+    );
   }
 
   async findById(id: string): Promise<UserDocument | null> {
@@ -360,15 +401,18 @@ export class UsersService {
 
     const user = await this.userModel.findById(cleanId);
     if (!user) {
+    const result = await this.userModel.findByIdAndDelete(cleanId);
+    if (!result) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
     // Si c'est un enfant, le retirer de la liste des enfants du parent
-    if (user.role === UserRole.ENFANT && user.parent) {
-      const parent = await this.userModel.findById(user.parent);
+    if (result.role === UserRole.ENFANT && result.parent) {
+      const parent = await this.userModel.findById(result.parent);
       if (parent && parent.enfants) {
         parent.enfants = parent.enfants.filter(
           (childId: any) => childId.toString() !== cleanId
+          (childId: any) => childId.toString() !== cleanId,
         );
         await parent.save();
       }
@@ -525,16 +569,11 @@ export class UsersService {
     };
   }
 
-  // Récupérer les enfants d'un coach (utilisé par les coaches pour sélectionner un enfant)
+  // Récupérer tous les enfants du système (utilisé par les coaches pour sélectionner un enfant)
+  // Les coaches peuvent voir tous les enfants pour créer des suivis
   async getChildrenOfCoach(coachId: string): Promise<UserDocument[]> {
-    return this.userModel.find({ coach: coachId, role: UserRole.ENFANT }).exec();
-  }
-
-  async updateVerificationCode(userId: string, code: string, expiresAt: Date): Promise<void> {
-    await this.userModel.findByIdAndUpdate(userId, {
-      verificationCode: code,
-      verificationCodeExpires: expiresAt,
-    });
+    // Return ALL children in the system
+    return this.userModel.find({ role: UserRole.ENFANT }).exec();
   }
 
   async markEmailAsVerified(userId: string): Promise<void> {
@@ -625,6 +664,13 @@ export class UsersService {
     }
 
     return child;
+  async findChildByName(prenom: string, nom: string): Promise<UserDocument | null> {
+    return this.userModel.findOne({
+      role: UserRole.ENFANT,
+      prenom: new RegExp(`^${prenom}$`, 'i'),
+      nom: new RegExp(`^${nom}$`, 'i'),
+    }).exec();
   }
 }
+
 

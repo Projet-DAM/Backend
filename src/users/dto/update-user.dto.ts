@@ -147,5 +147,10 @@ export class UpdateUserDto {
   @IsMongoId()
   @IsString()
   coach?: string;
+
+  @ApiProperty({ example: 'fcm_token_string', description: 'Token FCM pour les notifications push', required: false })
+  @IsOptional()
+  @IsString()
+  fcmToken?: string;
 }
 

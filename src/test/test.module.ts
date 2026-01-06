@@ -10,3 +10,9 @@ import { Subscription, SubscriptionSchema } from '../subscriptions/schemas/subsc
     controllers: [TestController],
 })
 export class TestModule { }
+import { TestController } from './test.controller';
+
+@Module({
+  controllers: [TestController],
+})
+export class TestModule {}

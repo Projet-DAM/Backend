@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Delete,
   Req,
   UseGuards,
   BadRequestException,
@@ -13,6 +14,10 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { MessagesService } from './messages.service';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { EditMessageDto } from './dto/edit-message.dto';
+import { ReactMessageDto } from './dto/react-message.dto';
+import { ReplyMessageDto } from './dto/reply-message.dto';
+import { TypingDto } from './dto/typing.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Assuming your JWT guard path
 import { UserRole } from '../users/interfaces/user-role.enum'; // Assuming your UserRole enum
 import { Roles } from '../common/decorators/roles.decorator'; // Assuming your Roles decorator
@@ -137,5 +142,69 @@ export class MessagesController {
       throw new BadRequestException('You are not authorized to mark this message as read.');
     }
     return message;
+  }
+
+  @Patch(':id/edit')
+  @Roles(UserRole.COACH, UserRole.PARENT)
+  @ApiOperation({ summary: 'Edit a message content (sender only)' })
+  async editMessage(
+    @Param('id') messageId: string,
+    @Body() dto: EditMessageDto,
+    @Req() req: CustomRequest,
+  ) {
+    return this.messagesService.editMessage(messageId, req.user.userId, dto);
+  }
+
+  @Patch(':id/for-me')
+  @Roles(UserRole.COACH, UserRole.PARENT)
+  @ApiOperation({ summary: 'Delete a message for current user (hide locally)' })
+  async deleteForMe(
+    @Param('id') messageId: string,
+    @Req() req: CustomRequest,
+  ) {
+    return this.messagesService.deleteForMe(messageId, req.user.userId);
+  }
+
+  @Delete(':id/for-everyone')
+  @Roles(UserRole.COACH, UserRole.PARENT)
+  @ApiOperation({ summary: 'Delete a message for everyone (sender only)' })
+  async deleteForEveryone(
+    @Param('id') messageId: string,
+    @Req() req: CustomRequest,
+  ) {
+    return this.messagesService.deleteForEveryone(messageId, req.user.userId);
+  }
+
+  @Post(':id/react')
+  @Roles(UserRole.COACH, UserRole.PARENT)
+  @ApiOperation({ summary: 'React to a message with an emoji (one per user)' })
+  async reactToMessage(
+    @Param('id') messageId: string,
+    @Body() dto: ReactMessageDto,
+    @Req() req: CustomRequest,
+  ) {
+    return this.messagesService.reactToMessage(messageId, req.user.userId, dto);
+  }
+
+  @Post(':conversationId/reply')
+  @Roles(UserRole.COACH, UserRole.PARENT)
+  @ApiOperation({ summary: 'Reply to a specific message in a conversation' })
+  async replyToMessage(
+    @Param('conversationId') conversationId: string,
+    @Body() dto: ReplyMessageDto,
+    @Req() req: CustomRequest,
+  ) {
+    return this.messagesService.replyToMessage(req.user.userId, conversationId, dto);
+  }
+
+  @Post('typing')
+  @Roles(UserRole.COACH, UserRole.PARENT)
+  @ApiOperation({ summary: 'Emit typing event via WebSocket channel (HTTP helper)' })
+  async typing(@Body() dto: TypingDto, @Req() req: CustomRequest) {
+    const otherId = dto.conversationUserId;
+    const conversationId = MessagesService.generateConversationId(req.user.userId, otherId);
+    // Lightweight publish via gateway if accessible; otherwise return payload for client to emit.
+    // In this controller context, we return the target conversation info.
+    return { conversationId, status: dto.status };
   }
 }

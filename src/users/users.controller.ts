@@ -12,6 +12,7 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   Req,
+  Request,
   Logger,
   ForbiddenException,
   UnauthorizedException,
@@ -44,11 +45,11 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UserResponseDto } from './dto/user-response.dto';
-import { LinkChildDto } from './dto/link-child.dto';
 import { CreateChildDto } from './dto/create-child.dto';
+import { UserResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from './interfaces/user-role.enum';
+import { Roles } from '../common/decorators/roles.decorator';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -62,29 +63,6 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
   private readonly logger = new Logger(UsersController.name);
-
-  @Delete('children/:childId')
-  @UseGuards(JwtAuthGuard)
-  @Roles(UserRole.PARENT, UserRole.ACADEMIE)
-  @ApiOperation({ summary: 'Supprimer un enfant (PARENT ou ACADEMIE)' })
-  @ApiParam({ name: 'childId', description: "ID de l'enfant à supprimer" })
-  @ApiResponse({ status: 200, description: 'Enfant supprimé avec succès' })
-  @ApiResponse({ status: 403, description: 'Non autorisé à supprimer cet enfant' })
-  @ApiResponse({ status: 404, description: 'Enfant non trouvé' })
-  async deleteChild(
-    @Param('childId') childId: string,
-    @Req() req: any
-  ): Promise<{ success: boolean; childId: string }> {
-    const tokenUserId = req?.user?.userId;
-    if (!req || !req.user || !tokenUserId) {
-      throw new UnauthorizedException('Token manquant ou invalide');
-    }
-    if (!childId || !Types.ObjectId.isValid(childId)) {
-      throw new BadRequestException({ message: "childId invalide" });
-    }
-    // Supprimer l'enfant (le service gère l'autorisation parent/académie)
-    return this.usersService.removeChild(childId, tokenUserId);
-  }
 
   @Post(':id/children')
   @Roles(UserRole.PARENT)
@@ -156,6 +134,9 @@ export class UsersController {
     // caller must be PARENT (Roles decorator enforces it) — pass tokenUserId as parent
     return this.usersService.createChildForParent(tokenUserId, createChildDto);
   }
+
+
+
   // Helper pour transformer UserDocument en format compatible Android
   private transformUserForResponse(user: any): any {
     if (!user) return null;
@@ -305,6 +286,7 @@ export class UsersController {
 
 
   @Get('enfants')
+  @UseGuards(JwtAuthGuard)
   @Roles(UserRole.COACH, UserRole.ACADEMIE, UserRole.PARENT)
   @ApiOperation({ summary: 'Récupérer la liste compacte des enfants (Coach/Académie; Parent returns own children)' })
   @ApiResponse({ status: 200, description: 'Liste compacte des enfants' })
@@ -488,15 +470,24 @@ export class UsersController {
   @ApiParam({ name: 'id', description: 'ID de l\'utilisateur' })
   @ApiResponse({ status: 200, description: 'Utilisateur supprimé' })
   @ApiResponse({ status: 404, description: 'Utilisateur non trouvé' })
-  @ApiResponse({ status: 403, description: 'Accès refusé' })
-  async remove(@Param('id') id: string, @Request() req) {
+  async remove(@Param('id') id: string, @Req() req: any) {
+    // sanitize and validate the incoming id (clients sometimes include trailing spaces)
+    const raw = id || '';
+    const decoded = decodeURIComponent(raw).trim();
+    if (!decoded || !Types.ObjectId.isValid(decoded)) {
+      throw new BadRequestException('id invalide');
+    }
+
     const currentUserRole = req.user?.role;
-    // Le JWT strategy retourne userId, pas sub
     const currentUserId = req.user?.userId || req.user?.sub;
 
-    const user = await this.usersService.findById(id);
+    if (!currentUserId) {
+      throw new UnauthorizedException('Token manquant ou invalide');
+    }
+
+    const user = await this.usersService.findById(decoded);
     if (!user) {
-      return null;
+      throw new NotFoundException('Utilisateur non trouvé');
     }
 
     // Si on supprime un enfant
@@ -504,8 +495,8 @@ export class UsersController {
       // Extraire l'ID du parent de l'enfant (peut être ObjectId ou objet peuplé)
       let childParentId: string | null = null;
       if (user.parent) {
-        if (typeof user.parent === 'object' && user.parent._id) {
-          childParentId = user.parent._id.toString();
+        if (typeof user.parent === 'object' && (user.parent as any)._id) {
+          childParentId = (user.parent as any)._id.toString();
         } else if (typeof user.parent === 'object' && user.parent.toString) {
           childParentId = user.parent.toString();
         } else {
@@ -519,14 +510,14 @@ export class UsersController {
       // Les parents ne peuvent supprimer que leurs propres enfants
       if (currentUserRole === UserRole.PARENT) {
         if (childParentId !== currentUserIdStr) {
-          throw new ForbiddenException(`Vous ne pouvez supprimer que vos propres enfants. Parent de l'enfant: ${childParentId}, Votre ID: ${currentUserIdStr}`);
+          throw new ForbiddenException(`Vous ne pouvez supprimer que vos propres enfants.`);
         }
         // Autoriser le parent à supprimer son enfant
       }
       // Les academies peuvent supprimer tous les enfants
-      if (currentUserRole === UserRole.ACADEMIE) {
+      else if (currentUserRole === UserRole.ACADEMIE) {
         // Autoriser
-      } else if (currentUserRole !== UserRole.PARENT) {
+      } else {
         throw new ForbiddenException('Seuls les parents et academies peuvent supprimer les enfants');
       }
     } else {
@@ -646,6 +637,8 @@ export class UsersController {
   })
   getChildData(@Param('parentId') parentId: string, @Param('childId') childId: string) {
     return this.usersService.getChildData(parentId, childId);
+    await this.usersService.remove(decoded);
+    return { success: true, id: decoded };
   }
 
   @Get(':id/children')
@@ -843,6 +836,33 @@ export class UsersController {
       this.logger.error('Error saving photo URL to user', e?.message || e);
       throw new Error('Erreur interne lors de l\'upload');
     }
+  }
+  @Patch(':id/fcm-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Mettre à jour le token FCM pour les notifications push' })
+  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        fcmToken: { type: 'string', example: 'fcm_token_string' },
+      },
+      required: ['fcmToken'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Token FCM mis à jour' })
+  async updateFcmToken(@Param('id') id: string, @Body('fcmToken') fcmToken: string, @Req() req: any) {
+    const tokenUserId = req?.user?.userId;
+    if (!req || !req.user || !tokenUserId) {
+      throw new UnauthorizedException('Token manquant ou invalide');
+    }
+
+    // Allow user to update their own token
+    if (tokenUserId !== id) {
+      throw new ForbiddenException('Vous ne pouvez mettre à jour que votre propre token FCM');
+    }
+
+    return this.usersService.update(id, { fcmToken });
   }
 }
 

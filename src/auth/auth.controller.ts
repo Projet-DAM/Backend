@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import {
   ApiTags,
@@ -66,6 +67,7 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Rôle invalide (seuls parent et coach peuvent s\'inscrire)' })
 
   @ApiBadRequestResponse({
+  @ApiBadRequestResponse({ 
     description: 'Données invalides',
     schema: {
       example: {

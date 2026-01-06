@@ -1,10 +1,14 @@
 
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message, MessageDocument } from './message.schema';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { EditMessageDto } from './dto/edit-message.dto';
+import { ReactMessageDto } from './dto/react-message.dto';
+import { ReplyMessageDto } from './dto/reply-message.dto';
 import { UsersService } from '../users/users.service'; // Assuming UsersService for user validation
+import { MessagesGateway } from './messages.gateway';
 
 @Injectable()
 export class MessagesService {
@@ -19,6 +23,7 @@ export class MessagesService {
   constructor(
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
     private usersService: UsersService, // Inject UsersService
+    @Inject(forwardRef(() => MessagesGateway)) private gateway: MessagesGateway,
   ) {}
 
   /**
@@ -97,5 +102,76 @@ export class MessagesService {
       .exec();
     if (!message) throw new NotFoundException('Message not found');
     return message;
+  }
+
+  async editMessage(messageId: string, userId: string, dto: EditMessageDto): Promise<Message> {
+    if (!Types.ObjectId.isValid(messageId)) throw new BadRequestException('Invalid message ID');
+    const message = await this.messageModel.findById(messageId).exec();
+    if (!message) throw new NotFoundException('Message not found');
+    if (message.sender.toString() !== userId) {
+      throw new BadRequestException('Only sender can edit the message');
+    }
+    if (message.isDeletedForAll) throw new BadRequestException('Cannot edit a deleted message');
+    message.content = dto.content;
+    message.edited = true;
+    message.editedAt = new Date();
+    const saved = await message.save();
+    this.gateway.server.to(saved.conversationId).emit('messageEdited', saved);
+    return saved;
+  }
+
+  async deleteForMe(messageId: string, userId: string): Promise<Message> {
+    if (!Types.ObjectId.isValid(messageId)) throw new BadRequestException('Invalid message ID');
+    const message = await this.messageModel.findById(messageId).exec();
+    if (!message) throw new NotFoundException('Message not found');
+    const uid = new Types.ObjectId(userId);
+    const exists = message.deletedFor.some((d) => d.toString() === uid.toString());
+    if (!exists) message.deletedFor.push(uid);
+    const saved = await message.save();
+    this.gateway.server.to(saved.conversationId).emit('messageDeletedForMe', { messageId: saved._id, userId });
+    return saved;
+  }
+
+  async deleteForEveryone(messageId: string, userId: string): Promise<Message> {
+    if (!Types.ObjectId.isValid(messageId)) throw new BadRequestException('Invalid message ID');
+    const message = await this.messageModel.findById(messageId).exec();
+    if (!message) throw new NotFoundException('Message not found');
+    if (message.sender.toString() !== userId) {
+      throw new BadRequestException('Only sender can delete for everyone');
+    }
+    message.isDeletedForAll = true;
+    const saved = await message.save();
+    this.gateway.server.to(saved.conversationId).emit('messageDeletedForAll', { messageId: saved._id });
+    return saved;
+  }
+
+  async reactToMessage(messageId: string, userId: string, dto: ReactMessageDto): Promise<Message> {
+    if (!Types.ObjectId.isValid(messageId)) throw new BadRequestException('Invalid message ID');
+    const message = await this.messageModel.findById(messageId).exec();
+    if (!message) throw new NotFoundException('Message not found');
+    const reactions = message.reactions || new Map<string, string>();
+    reactions.set(userId, dto.emoji);
+    message.reactions = reactions;
+    const saved = await message.save();
+    this.gateway.server.to(saved.conversationId).emit('messageReaction', { messageId: saved._id, userId, emoji: dto.emoji });
+    return saved;
+  }
+
+  async replyToMessage(senderId: string, conversationId: string, dto: ReplyMessageDto): Promise<Message> {
+    if (!Types.ObjectId.isValid(dto.replyToMessageId)) throw new BadRequestException('Invalid replyToMessageId');
+    const parent = await this.messageModel.findById(dto.replyToMessageId).exec();
+    if (!parent) throw new NotFoundException('Parent message not found');
+    const newMessage = new this.messageModel({
+      sender: new Types.ObjectId(senderId),
+      receiver: parent.sender.toString() === senderId ? parent.receiver : parent.sender,
+      conversationId,
+      type: dto.mediaUrl ? 'image' : 'text',
+      content: dto.content,
+      mediaUrl: dto.mediaUrl,
+      replyToMessageId: parent._id,
+    });
+    const saved = await newMessage.save();
+    this.gateway.server.to(conversationId).emit('receiveMessage', saved);
+    return saved;
   }
 }

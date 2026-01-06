@@ -8,7 +8,9 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MessagesService } from './messages.service';
+import { Inject, forwardRef } from '@nestjs/common';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { TypingDto } from './dto/typing.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserRole } from '../users/interfaces/user-role.enum'; // Adjust path if necessary
@@ -30,7 +32,7 @@ export class MessagesGateway {
   @WebSocketServer() server: Server;
 
   constructor(
-    private readonly messagesService: MessagesService,
+    @Inject(forwardRef(() => MessagesService)) private readonly messagesService: MessagesService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) { }
@@ -95,5 +97,16 @@ export class MessagesGateway {
   handleLeaveConversation(@ConnectedSocket() client: Socket, @MessageBody() conversationId: string) {
     client.leave(conversationId);
     console.log(`WebSocket: Client ${client.id} left conversation ${conversationId}`);
+  }
+
+  @SubscribeMessage('typing')
+  handleTyping(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() payload: TypingDto) {
+    const otherId = payload.conversationUserId;
+    const conversationId = MessagesService.generateConversationId(client.user.userId, otherId);
+    this.server.to(conversationId).emit('typing', {
+      userId: client.user.userId,
+      status: payload.status,
+      conversationId,
+    });
   }
 }

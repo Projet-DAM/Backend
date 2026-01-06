@@ -8,7 +8,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { ApiConsumes, ApiBody, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 const imageFileFilter = (req, file, callback) => {
@@ -49,7 +49,7 @@ export class UploadsController {
       storage: diskStorage({
         destination: './uploads/messages/images',
         filename: (req, file, callback) => {
-          const uniqueSuffix = uuidv4();
+          const uniqueSuffix = randomUUID();
           const ext = extname(file.originalname);
           callback(null, `${uniqueSuffix}${ext}`);
         },
@@ -88,7 +88,7 @@ export class UploadsController {
       storage: diskStorage({
         destination: './uploads/messages/audio',
         filename: (req, file, callback) => {
-          const uniqueSuffix = uuidv4();
+          const uniqueSuffix = randomUUID();
           const ext = extname(file.originalname);
           callback(null, `${uniqueSuffix}${ext}`);
         },

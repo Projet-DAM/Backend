@@ -35,6 +35,28 @@ export class CreateUserDto {
 
 
   @ApiProperty({
+    example: 'jean.dupont@example.com',
+    description: 'Adresse email',
+    required: true,
+    format: 'email'
+  })
+  @IsNotEmpty({ message: 'L\'email est requis' })
+  @IsEmail({}, { message: 'L\'email doit être valide' })
+  email: string;
+
+  @ApiProperty({
+    example: 'password123',
+    description: 'Mot de passe (minimum 6 caractères)',
+    minLength: 6,
+    required: true,
+    format: 'password'
+  })
+  @IsNotEmpty({ message: 'Le mot de passe est requis' })
+  @IsString()
+  @MinLength(6, { message: 'Le mot de passe doit contenir au moins 6 caractères' })
+  motDePasse: string;
+
+  @ApiProperty({
     example: 'parent',
     description: 'Rôle de l\'utilisateur',
     enum: UserRole,
