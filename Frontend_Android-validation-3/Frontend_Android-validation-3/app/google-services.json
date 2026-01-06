@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "557620426562",
+    "project_id": "android-13b39",
+    "storage_bucket": "android-13b39.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:557620426562:android:86de3a2e8629052f5ffadb",
+        "android_client_info": {
+          "package_name": "com.example.dam_front"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9BPWdHdNxKwR3RjS7JrRYLfhzIEbw_gY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:557620426562:android:1b8aee05a628e2995ffadb",
+        "android_client_info": {
+          "package_name": "com.sporty"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9BPWdHdNxKwR3RjS7JrRYLfhzIEbw_gY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:557620426562:android:44a9c52f64846af45ffadb",
+        "android_client_info": {
+          "package_name": "com.sporty.secondary"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9BPWdHdNxKwR3RjS7JrRYLfhzIEbw_gY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

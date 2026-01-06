@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Main Glassmorphism-style Background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#F8FAFC" />
+            <corners android:radius="28dp" />
+            <stroke android:width="1dp" android:color="#E2E8F0" />
+        </shape>
+    </item>
+
+    <!-- Header Bar -->
+    <item android:top="16dp" android:left="20dp" android:right="20dp" android:bottom="230dp">
+        <shape android:shape="rectangle">
+            <!-- Simulated Logo -->
+            <solid android:color="#0E5C75" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+    <item android:top="22dp" android:left="50dp" android:right="120dp" android:bottom="236dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0E5C75" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+
+    <!-- Profile Section -->
+    <item android:top="50dp" android:left="20dp" android:width="44dp" android:height="44dp">
+        <shape android:shape="oval">
+            <solid android:color="#E3F2FD" />
+        </shape>
+    </item>
+    <!-- Profile Text Mockup -->
+    <item android:top="56dp" android:left="72dp" android:right="150dp" android:bottom="208dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#6F7B91" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+    <item android:top="68dp" android:left="72dp" android:right="60dp" android:bottom="190dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0E5C75" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+
+    <!-- Section Title -->
+    <item android:top="110dp" android:left="20dp" android:right="80dp" android:bottom="155dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0E5C75" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+
+    <!-- Program Card 1 -->
+    <item android:top="130dp" android:left="16dp" android:right="16dp" android:bottom="80dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#F0F7FF" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <!-- Icon in Card 1 -->
+    <item android:top="142dp" android:left="28dp" android:width="32dp" android:height="32dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+    <!-- Text in Card 1 -->
+    <item android:top="145dp" android:left="72dp" android:right="80dp" android:bottom="115dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0E5C75" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item android:top="158dp" android:left="72dp" android:right="100dp" android:bottom="105dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#64748B" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+
+    <!-- Program Card 2 -->
+    <item android:top="190dp" android:left="16dp" android:right="16dp" android:bottom="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#F0F7FF" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <!-- Icon in Card 2 -->
+    <item android:top="202dp" android:left="28dp" android:width="32dp" android:height="32dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+    <!-- Text in Card 2 -->
+    <item android:top="205dp" android:left="72dp" android:right="80dp" android:bottom="55dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0E5C75" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item android:top="218dp" android:left="72dp" android:right="100dp" android:bottom="45dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#64748B" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+    
+    <!-- Student count badge mockups -->
+    <item android:top="142dp" android:left="210dp" android:right="28dp" android:bottom="108dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#1A0E5C75" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    <item android:top="202dp" android:left="210dp" android:right="28dp" android:bottom="48dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#1A0E5C75" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+</layer-list>

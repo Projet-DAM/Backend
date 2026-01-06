@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">SportyKIDS</string>
+    <string name="default_notification_channel_id">default_channel_id</string>
+    
+    <!-- Notification Channels -->
+    <string name="channel_enrollment_id">enrollment_channel</string>
+    <string name="channel_enrollment_name">Inscriptions</string>
+    <string name="channel_enrollment_description">Notifications concernant les inscriptions aux programmes</string>
+    
+    <string name="channel_payment_id">payment_channel</string>
+    <string name="channel_payment_name">Paiements</string>
+    <string name="channel_payment_description">Notifications concernant les paiements et transactions</string>
+    
+    <string name="channel_updates_id">updates_channel</string>
+    <string name="channel_updates_name">Mises à jour</string>
+    <string name="channel_updates_description">Notifications concernant les mises à jour de programmes</string>
+    
+    <string name="channel_general_id">general_channel</string>
+    <string name="channel_general_name">Général</string>
+    <string name="channel_general_description">Notifications générales de SportyConnect</string>
+    <string name="widget_description">Affichez vos programmes et tournois SportyKIDS d\'un coup d\'œil.</string>
+</resources>
+
+
+
+
+
+
+
+
+

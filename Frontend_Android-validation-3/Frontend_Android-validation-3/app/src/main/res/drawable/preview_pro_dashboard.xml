@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    
+    <!-- Fond du widget -->
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M20,0 L180,0 A20,20 0,0 1 200,20 L200,180 A20,20 0,0 1 180,200 L20,200 A20,20 0,0 1 0,180 L0,20 A20,20 0,0 1 20,0 Z" />
+    
+    <!-- Header Bleu Sporty -->
+    <path
+        android:fillColor="#0E5C75"
+        android:pathData="M20,0 L180,0 A20,20 0,0 1 200,20 L200,40 L0,40 L0,20 A20,20 0,0 1 20,0 Z" />
+    
+    <!-- Texte Header simulé -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,15 L80,15 L80,25 L20,25 Z" />
+
+    <!-- Avatar -->
+    <path
+        android:fillColor="#E3F2FD"
+        android:pathData="M35,70 A15,15 0,1 1 35,100 A15,15 0,1 1 35,70 Z" />
+        
+    <!-- Nom Coach simulé -->
+    <path
+        android:fillColor="#0E5C75"
+        android:pathData="M60,75 L140,75 L140,85 L60,85 Z" />
+    <path
+        android:fillColor="#6F7B91"
+        android:pathData="M60,90 L110,90 L110,96 L60,96 Z" />
+
+    <!-- Programme 1 -->
+    <path
+        android:fillColor="#F0F7FF"
+        android:pathData="M15,115 L185,115 A8,8 0,0 1 193,123 L193,145 A8,8 0,0 1 185,153 L15,153 A8,8 0,0 1 7,145 L7,123 A8,8 0,0 1 15,115 Z" />
+    
+    <!-- Programme 2 -->
+    <path
+        android:fillColor="#F0F7FF"
+        android:pathData="M15,165 L185,165 A8,8 0,0 1 193,173 L193,195 A8,8 0,0 1 185,203 L15,203 A8,8 0,0 1 7,195 L7,173 A8,8 0,0 1 15,165 Z" />
+        
+</vector>

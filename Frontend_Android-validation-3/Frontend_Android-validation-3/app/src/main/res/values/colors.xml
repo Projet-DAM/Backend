@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Sporty Kids palette -->
+    <color name="sporty_blue_dark">#0E5C75</color>
+    <color name="sporty_blue">#13818A</color>
+    <color name="sporty_teal">#3FB7C9</color>
+    <color name="sporty_green">#9AD93A</color>
+    <color name="sporty_orange">#F16A2D</color>
+    <color name="sporty_star">#9AD93A</color>
+    <color name="splash_background">#F3FCFF</color>
+</resources>
+
+
+
+
+
+
+
+
+
