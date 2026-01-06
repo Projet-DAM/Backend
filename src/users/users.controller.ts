@@ -25,6 +25,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { Types } from 'mongoose';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -132,7 +133,7 @@ export class UsersController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @Public()
   @ApiOperation({ summary: 'Créer un nouvel utilisateur' })
   async create(@Body() createUserDto: CreateUserDto, @Request() req) {
     const currentUserRole = req.user?.role;
@@ -148,8 +149,12 @@ export class UsersController {
         createUserDto.email = `enfant_${Date.now()}_${Math.random().toString(36).substring(7)}@temp.com`;
       }
     } else {
-      if (currentUserRole !== UserRole.ACADEMIE) {
-        throw new ForbiddenException('Seul le rôle academie peut créer des utilisateurs');
+      // Pour les autres rôles (PARENT, COACH, ACADEMIE), on autorise la création publique
+      // Si un token est présent, on vérifie les droits, sinon on autorise si c'est une auto-inscription
+      if (currentUserId && currentUserRole !== UserRole.ADMIN && currentUserRole !== UserRole.ACADEMIE) {
+        if (createUserDto.role === UserRole.ADMIN) {
+          throw new ForbiddenException('Seul un administrateur peut créer un autre administrateur');
+        }
       }
     }
 

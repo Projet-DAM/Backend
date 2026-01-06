@@ -6,6 +6,7 @@ import { LoginUserDto } from '../users/dto/login-user.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { JwtPayload } from './jwt.strategy';
 import { EmailService } from '../common/services/email.service';
+import { UserRole } from '../users/interfaces/user-role.enum';
 
 @Injectable()
 export class AuthService {
@@ -53,9 +54,9 @@ export class AuthService {
   }
 
   async register(createUserDto: CreateUserDto) {
-    // Valider que seuls les rôles parent et coach peuvent s'inscrire via cette interface
-    if (createUserDto.role !== 'parent' && createUserDto.role !== 'coach') {
-      throw new BadRequestException('Seuls les rôles "parent" et "coach" peuvent s\'inscrire via cette interface');
+    // Valider que seuls les rôles parent, coach et academie peuvent s'inscrire via cette interface
+    if (createUserDto.role !== UserRole.PARENT && createUserDto.role !== UserRole.COACH && createUserDto.role !== UserRole.ACADEMIE) {
+      throw new BadRequestException('Seuls les rôles "parent", "coach" et "academie" peuvent s\'inscrire via cette interface');
     }
 
     const user = await this.usersService.create(createUserDto);
