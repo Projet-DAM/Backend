@@ -7,7 +7,7 @@ export class UpdateSubscriptionDto extends PartialType(CreateSubscriptionDto) {
   // Parent can update autoRenew, notes, and startDate; admin/academy can update status/paymentStatus
   @IsOptional()
   @IsBoolean()
-  override autoRenew?: boolean;
+  autoRenew?: boolean;
 
   @IsOptional()
   @IsString()
