@@ -220,10 +220,36 @@ export class UsersService {
   }
 
   async getChildren(parentId: string): Promise<UserDocument[]> {
+    const queryId = Types.ObjectId.isValid(parentId) ? new Types.ObjectId(parentId) : parentId;
+
+    // 1. Find children who have this parent assigned or created by them
     const children = await this.userModel.find({
       role: UserRole.ENFANT,
-      $or: [{ parent: parentId }, { createdBy: parentId }],
+      $or: [
+        { parent: queryId },
+        { createdBy: queryId },
+        { parent: parentId.toString() },
+        { createdBy: parentId.toString() }
+      ],
     }).exec();
+
+    // 2. Also check if the parent document has children in its 'enfants' array
+    // This handles cases where only one side of the relationship was updated
+    const parent = await this.userModel.findById(queryId).exec();
+    if (parent && parent.enfants && parent.enfants.length > 0) {
+      const childIdsFromParent = parent.enfants.map(e => e.toString());
+      const childIdsAlreadyFound = children.map(c => c._id.toString());
+      const missingChildIds = childIdsFromParent.filter(id => !childIdsAlreadyFound.includes(id));
+
+      if (missingChildIds.length > 0) {
+        const additionalChildren = await this.userModel.find({
+          _id: { $in: missingChildIds },
+          role: UserRole.ENFANT
+        }).exec();
+        return [...children, ...additionalChildren];
+      }
+    }
+
     return children;
   }
 

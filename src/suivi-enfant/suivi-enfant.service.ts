@@ -283,29 +283,13 @@ export class SuiviEnfantService {
     this.logger.debug(`findOne: suiviId=${id} enfantId=${enfantId} enfant.parent=${childParentId} enfant.createdBy=${childCreatedBy} requester=${currentUser.userId}`);
 
     if (currentUser.role === UserRole.PARENT) {
-      // primary checks
-      let allowed = (childParentId === currentUser.userId) || (childCreatedBy === currentUser.userId);
-      if (!allowed) {
-        // fallback: check parent's enfants membership
-        allowed = await this.parentOwnsChild(currentUser.userId, enfantId);
-        if (allowed) this.logger.debug(`findOne: allowed by parent.enfants membership for requester=${currentUser.userId}`);
-      }
-      // additional robust fallback: fetch the parent's children list and check IDs
-      if (!allowed) {
-        try {
-          const parentsChildren = await this.usersService.getChildren(currentUser.userId);
-          const ids = (parentsChildren || []).map((c: any) => this.extractId(c._id) || (c._id ? c._id.toString() : undefined)).filter(Boolean);
-          if (ids.includes(enfantId)) {
-            allowed = true;
-            this.logger.debug(`findOne: allowed by usersService.getChildren for requester=${currentUser.userId}`);
-          }
-        } catch (e) {
-          // ignore and proceed to deny if not allowed
-        }
-      }
-      if (!allowed) {
-        this.logger.warn(`Unauthorized findOne: requester=${currentUser.userId} cannot access suivi=${id} for enfant=${enfantId}`);
-        throw new ForbiddenException('Ce suivi n\'appartient pas à un enfant de ce parent');
+      const parentId = currentUser.userId.toString();
+      const children = await this.usersService.getChildren(parentId);
+      const isMyChild = children.some(c => c._id.toString() === enfantId);
+
+      if (!isMyChild) {
+        this.logger.warn(`Permission denied (findOne): Parent ${parentId} tried to access suivi ${id} for child ${enfantId}.`);
+        throw new ForbiddenException("Ce suivi n'appartient pas à un enfant de ce parent");
       }
       return suivi;
     }
@@ -342,22 +326,15 @@ export class SuiviEnfantService {
     }
 
     if (currentUser.role === UserRole.PARENT) {
-      const childParentId = this.extractId((enfant as any).parent);
-      const childCreatedBy = this.extractId((enfant as any).createdBy);
-      this.logger.debug(`findByEnfant: enfantId=${enfantId} parent=${childParentId} createdBy=${childCreatedBy} requester=${currentUser.userId}`);
-      // Primary check: parent or createdBy matches requester
-      const reqId = currentUser.userId.toString();
-      let allowed = (childParentId === reqId) || (childCreatedBy === reqId);
+      const parentId = currentUser.userId.toString();
+      const children = await this.usersService.getChildren(parentId);
+      const isMyChild = children.some(c => c._id.toString() === enfantId);
 
-      // Fallback: check via usersService.getChildren
-      if (!allowed) {
-        allowed = await this.parentOwnsChild(reqId, enfantId);
-      }
-
-      if (!allowed) {
-        this.logger.warn(`Unauthorized findByEnfant: parent=${reqId} tried to access child=${enfantId} (child.parent=${childParentId}, child.createdBy=${childCreatedBy})`);
+      if (!isMyChild) {
+        this.logger.warn(`Permission denied (findByEnfant): Parent ${parentId} tried to access child ${enfantId}.`);
         throw new ForbiddenException("Cet enfant n'appartient pas à ce parent");
       }
+
       return this.suiviModel
         .find({ $or: [{ enfant: new Types.ObjectId(enfantId) }, { 'enfant._id': new Types.ObjectId(enfantId) }] })
         .populate('enfant')
