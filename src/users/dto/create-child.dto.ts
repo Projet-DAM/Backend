@@ -36,11 +36,11 @@ export class CreateChildDto {
     description: 'Sport pratiqué par l\'enfant',
     enum: SportType,
     enumName: 'SportType',
-    required: true,
+    required: false,
   })
-  @IsNotEmpty({ message: 'Le sport pratiqué est requis' })
+  @IsOptional()
   @IsEnum(SportType, { message: 'Le sport doit être l\'un des suivants: football, basketball, tennis, natation, volleyball, handball, rugby, judo, karate, athletisme, gymnastique, escalade, cyclisme' })
-  sportPratique: SportType;
+  sportPratique?: SportType;
 
   @ApiProperty({
     example: 'https://example.com/photo.jpg',
