@@ -18,7 +18,7 @@ import { AuthResponseDto } from './dto/auth-response.dto';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('register')
   @Public()
@@ -64,10 +64,8 @@ export class AuthController {
   })
   @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
   @ApiResponse({ status: 400, description: 'Rôle invalide (seuls parent et coach peuvent s\'inscrire)' })
-    description: 'Utilisateur créé et authentifié avec succès',
-    type: AuthResponseDto,
-  })
-  @ApiBadRequestResponse({ 
+
+  @ApiBadRequestResponse({
     description: 'Données invalides',
     schema: {
       example: {
@@ -77,7 +75,7 @@ export class AuthController {
       }
     }
   })
-  @ApiConflictResponse({ 
+  @ApiConflictResponse({
     description: 'Email déjà utilisé',
     schema: {
       example: {
@@ -113,7 +111,7 @@ export class AuthController {
     description: 'Connexion réussie',
     type: AuthResponseDto,
   })
-  @ApiBadRequestResponse({ 
+  @ApiBadRequestResponse({
     description: 'Données invalides',
     schema: {
       example: {
@@ -123,7 +121,7 @@ export class AuthController {
       }
     }
   })
-  @ApiUnauthorizedResponse({ 
+  @ApiUnauthorizedResponse({
     description: 'Email ou mot de passe incorrect',
     schema: {
       example: {

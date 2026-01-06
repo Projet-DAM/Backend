@@ -24,8 +24,8 @@ export class UpdateUserDto {
   @MinLength(6)
   motDePasse?: string;
 
-  @ApiProperty({ 
-    example: 'parent', 
+  @ApiProperty({
+    example: 'parent',
     description: 'Rôle de l\'utilisateur',
     enum: UserRole,
     enumName: 'UserRole',
@@ -40,9 +40,14 @@ export class UpdateUserDto {
   @IsString()
   photoProfil?: string;
 
+  @ApiProperty({ example: '+33612345678', description: 'Numéro de téléphone', required: false })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
   // Attributs spécifiques au Coach
-  @ApiProperty({ 
-    example: ['Certification FIFA', 'Diplôme Entraîneur'], 
+  @ApiProperty({
+    example: ['Certification FIFA', 'Diplôme Entraîneur'],
     description: 'Liste des certifications du coach',
     required: false,
     type: [String]
@@ -52,8 +57,8 @@ export class UpdateUserDto {
   @IsString({ each: true })
   certification?: string[];
 
-  @ApiProperty({ 
-    example: 'Football', 
+  @ApiProperty({
+    example: 'Football',
     description: 'Spécialité du coach',
     required: false
   })
@@ -61,8 +66,8 @@ export class UpdateUserDto {
   @IsString()
   specialite?: string;
 
-  @ApiProperty({ 
-    example: 5, 
+  @ApiProperty({
+    example: 5,
     description: 'Années d\'expérience du coach',
     required: false
   })
@@ -71,8 +76,8 @@ export class UpdateUserDto {
   experience?: number;
 
   // Attributs spécifiques à l'Enfant
-  @ApiProperty({ 
-    example: '2010-05-15', 
+  @ApiProperty({
+    example: '2010-05-15',
     description: 'Date de naissance de l\'enfant (format ISO: YYYY-MM-DD)',
     required: false
   })
@@ -80,8 +85,8 @@ export class UpdateUserDto {
   @IsDateString()
   dateNaissance?: string;
 
-  @ApiProperty({ 
-    example: 'M', 
+  @ApiProperty({
+    example: 'M',
     description: 'Sexe de l\'enfant (M ou F)',
     required: false,
     enum: ['M', 'F']
@@ -91,8 +96,8 @@ export class UpdateUserDto {
   sexe?: string;
 
   // Attributs spécifiques à l'Académie
-  @ApiProperty({ 
-    example: 'Académie de Football Excellence', 
+  @ApiProperty({
+    example: 'Académie de Football Excellence',
     description: 'Nom de l\'académie',
     required: false
   })
@@ -100,8 +105,8 @@ export class UpdateUserDto {
   @IsString()
   nomAcademie?: string;
 
-  @ApiProperty({ 
-    example: '123 Rue de la Sport, 75000 Paris', 
+  @ApiProperty({
+    example: '123 Rue de la Sport, 75000 Paris',
     description: 'Adresse/localisation de l\'académie',
     required: false
   })
@@ -109,8 +114,8 @@ export class UpdateUserDto {
   @IsString()
   adresse?: string;
 
-  @ApiProperty({ 
-    example: 'Une académie dédiée au développement des jeunes talents', 
+  @ApiProperty({
+    example: 'Une académie dédiée au développement des jeunes talents',
     description: 'Description de l\'académie',
     required: false
   })
@@ -118,12 +123,12 @@ export class UpdateUserDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: {
       lundi: { debut: '09:00', fin: '17:00' },
       mardi: { debut: '09:00', fin: '17:00' },
       mercredi: { debut: '09:00', fin: '17:00' }
-    }, 
+    },
     description: 'Horaires de l\'académie (jours et heures)',
     required: false,
     type: Object

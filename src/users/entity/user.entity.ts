@@ -5,7 +5,17 @@ import { SportType } from '../interfaces/sport-type.enum';
 
 export type UserDocument = User & Document;
 
-@Schema({ timestamps: true })
+@Schema({
+  timestamps: true,
+  toJSON: {
+    virtuals: true,
+    transform: (doc, ret: any) => {
+      ret.id = ret._id?.toString() || ret.id;
+      return ret;
+    },
+  },
+  toObject: { virtuals: true },
+})
 export class User {
   _id: Types.ObjectId;
 
@@ -26,6 +36,9 @@ export class User {
 
   @Prop()
   photoProfil?: string;
+
+  @Prop()
+  phoneNumber?: string;
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
   enfants?: Types.ObjectId[];
@@ -88,4 +101,8 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+UserSchema.virtual('id').get(function (this: any) {
+  return this._id?.toHexString ? this._id.toHexString() : this._id?.toString();
+});
 

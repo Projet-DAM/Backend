@@ -1,6 +1,8 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { EmailService } from '../common/services/email.service';
+import { SmsService } from '../common/services/sms.service';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model } from 'mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
 import { Subscription, SubscriptionDocument, SubscriptionStatus, PaymentStatus } from './schemas/subscription.schema';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
@@ -9,19 +11,90 @@ import { OffersService } from '../offers/offers.service';
 import { OfferDocument } from '../offers/schemas/offer.schema';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UserRole } from '../users/interfaces/user-role.enum';
+import { SubscriptionOptionsService } from '../subscription-options/subscription-options.service';
 
 @Injectable()
 export class SubscriptionsService {
+  private readonly logger = new Logger(SubscriptionsService.name);
+
   constructor(
     @InjectModel(Subscription.name) private subscriptionModel: Model<SubscriptionDocument>,
     private usersService: UsersService,
     private offersService: OffersService,
-  ) {}
+    private emailService: EmailService,
+    private smsService: SmsService,
+    private subscriptionOptionsService: SubscriptionOptionsService,
+  ) { }
 
-  private computeEndDate(start: Date, offer: OfferDocument): Date {
-    const end = new Date(start);
-    end.setDate(end.getDate() + offer.durationDays - 1);
-    return end;
+  private async sendConfirmationEmail(sub: SubscriptionDocument, offer: OfferDocument, totalPaid: number) {
+    try {
+      const parent = await this.usersService.findById(sub.parentId.toString());
+      if (!parent) return;
+
+      const dateStart = new Date(sub.startDate).toLocaleDateString('fr-FR');
+      const dateEnd = new Date(sub.endDate).toLocaleDateString('fr-FR');
+      const currency = sub.transactions[0]?.currency || 'TND';
+      const amountFormatted = `${totalPaid.toFixed(2)} ${currency}`;
+
+      await this.emailService.sendPaymentConfirmation(
+        parent.email,
+        `${parent.prenom || 'Parent'} ${parent.nom || ''}`,
+        offer.name,
+        totalPaid,
+        currency,
+        new Date(sub.startDate),
+        new Date(sub.endDate)
+      );
+
+      // Send SMS
+      const phoneNumber = parent.phoneNumber || (parent as any).telephone;
+      if (phoneNumber) {
+        const smsMessage = `Votre paiement de ${amountFormatted} pour l'offre "${offer.name}" a été effectué avec succès.`;
+        await this.smsService.sendSms(phoneNumber, smsMessage);
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to send confirmation email`, error.message);
+    }
+  }
+
+  /**
+   * Vérifie si un enfant a déjà un abonnement actif pour éviter les doublons
+   */
+  async validateNewSubscription(childId: string): Promise<void> {
+    const now = new Date();
+    const existingActiveSub = await this.subscriptionModel.findOne({
+      childId: childId,
+      status: SubscriptionStatus.ACTIVE,
+      endDate: { $gt: now },
+    });
+
+    if (existingActiveSub) {
+      throw new BadRequestException(
+        `Abonnement actif jusqu'au ${existingActiveSub.endDate.toLocaleDateString('fr-FR')}. Inscription possible le mois prochain.`
+      );
+    }
+  }
+
+  /**
+   * Vérifie si un parent a déjà un abonnement actif pour la même offre
+   * Un parent peut avoir plusieurs abonnements actifs mais pas pour la même offre
+   */
+  async validateParentSubscriptionForOffer(parentId: string, offerId: string): Promise<void> {
+    const now = new Date();
+    const existingActiveSub = await this.subscriptionModel.findOne({
+      parentId: parentId,
+      offerId: offerId,
+      status: SubscriptionStatus.ACTIVE,
+      endDate: { $gt: now },
+    });
+
+    if (existingActiveSub) {
+      const offer = await this.offersService.findOne(offerId).catch(() => null);
+      const offerName = offer?.name || 'cette offre';
+      throw new ConflictException(
+        `Vous avez déjà un abonnement actif pour ${offerName} jusqu'au ${existingActiveSub.endDate.toLocaleDateString('fr-FR')}. Vous ne pouvez pas vous inscrire à nouveau à la même offre tant que l'abonnement est actif.`
+      );
+    }
   }
 
   private assertFutureOrToday(date: Date) {
@@ -32,28 +105,16 @@ export class SubscriptionsService {
     }
   }
 
-  /**
-   * Extract parent ID from child document, handling both populated and non-populated cases
-   */
+  private calculateTotalPrice(offer: OfferDocument, selectedOptions: any[]): number {
+    const basePrice = offer.price * (1 - (offer.discountPct || 0) / 100);
+    const optionsTotal = (selectedOptions || []).reduce((sum, option) => sum + (option.price || 0), 0);
+    return basePrice + optionsTotal;
+  }
+
   private extractParentId(child: any): string | null {
-    if (!child || !child.parent) {
-      return null;
-    }
-    
+    if (!child || !child.parent) return null;
     const parent = child.parent;
-    
-    // If it's an object with _id (populated User)
-    if (typeof parent === 'object' && parent !== null) {
-      if ('_id' in parent) {
-        return String(parent._id);
-      }
-      // If it's an ObjectId, it has toString method
-      if (typeof parent.toString === 'function') {
-        return String(parent);
-      }
-    }
-    
-    // If it's already a string or can be converted
+    if (typeof parent === 'object' && parent !== null && '_id' in parent) return String(parent._id);
     return String(parent);
   }
 
@@ -61,29 +122,41 @@ export class SubscriptionsService {
     if (actor.role !== UserRole.PARENT) {
       throw new ForbiddenException('Seul un parent peut créer un abonnement');
     }
-    // Validate parent-child relation
     const child = await this.usersService.findById(dto.childId);
     if (!child) throw new NotFoundException('Enfant non trouvé');
-    
+
     const parentId = this.extractParentId(child);
-    const actorId = String(actor.userId).trim();
-    
-    if (!parentId || parentId.trim() !== actorId) {
-      throw new ForbiddenException(
-        `Cet enfant n'appartient pas au parent authentifié. ` +
-        `Parent ID de l'enfant: ${parentId || 'null'}, ` +
-        `ID du parent authentifié: ${actorId}`
-      );
+    if (!parentId || parentId.trim() !== String(actor.userId).trim()) {
+      throw new ForbiddenException('Enfant non lié à ce parent');
     }
 
     const offer = await this.offersService.findOne(dto.offerId);
-    if (!offer.isActive) {
-      throw new ConflictException('Offre inactive');
-    }
+    if (!offer.isActive) throw new ConflictException('Offre inactive');
+    // if (offer.isFull) throw new ConflictException('Offre complète'); // isFull non présent dans le schéma actuel
+
+    // Vérifier que le parent n'a pas déjà un abonnement actif pour cette offre
+    await this.validateParentSubscriptionForOffer(actor.userId, dto.offerId);
 
     const startDate = dto.startDate ? new Date(dto.startDate) : new Date();
     this.assertFutureOrToday(startDate);
     const endDate = this.computeEndDate(startDate, offer);
+
+    // Resolve options
+    const resolvedOptions: any[] = [];
+    if (dto.selectedOptions && dto.selectedOptions.length > 0) {
+      const allOptions = this.subscriptionOptionsService.getAvailableOptions();
+      for (const optType of dto.selectedOptions) {
+        const option = allOptions.find(o => o.type === optType as any);
+        if (option) {
+          resolvedOptions.push({
+            type: option.type,
+            name: option.name,
+            price: option.price,
+            currency: option.currency
+          });
+        }
+      }
+    }
 
     const created = new this.subscriptionModel({
       childId: dto.childId,
@@ -94,31 +167,97 @@ export class SubscriptionsService {
       autoRenew: !!dto.autoRenew,
       status: SubscriptionStatus.PENDING,
       paymentStatus: PaymentStatus.UNPAID,
-      transactions: [],
+      selectedOptions: resolvedOptions,
     });
     return created.save();
   }
 
-  async findAll(filters: { status?: SubscriptionStatus; paymentStatus?: PaymentStatus; parentId?: string; childId?: string; page?: number; limit?: number; sort?: string; }, actor: { userId: string; role: UserRole }) {
-    const page = Math.max(1, filters.page || 1);
-    const limit = Math.min(100, Math.max(1, filters.limit || 10));
-    const sort = filters.sort || '-createdAt';
-    const query: FilterQuery<SubscriptionDocument> = {};
-    if (filters.status) query.status = filters.status;
-    if (filters.paymentStatus) query.paymentStatus = filters.paymentStatus;
-    if (filters.parentId) query.parentId = filters.parentId as any;
-    if (filters.childId) query.childId = filters.childId as any;
-
-    // Scope: Academy can later be restricted to own offers' subscribers, but for now ADMIN/ACADEMIE full list
+  async findAll(filters: any, actor: { userId: string; role: UserRole }) {
     if (![UserRole.ADMIN, UserRole.ACADEMIE].includes(actor.role)) {
       throw new ForbiddenException('Accès refusé');
     }
 
-    const [data, total] = await Promise.all([
-      this.subscriptionModel.find(query).sort(sort).skip((page - 1) * limit).limit(limit).exec(),
+    const page = Math.max(1, filters.page || 1);
+    const limit = Math.min(100, Math.max(1, filters.limit || 10));
+    const sort = filters.sort || '-createdAt';
+
+    const query: FilterQuery<SubscriptionDocument> = {};
+    if (filters.status) query.status = filters.status;
+    if (filters.paymentStatus) query.paymentStatus = filters.paymentStatus;
+    if (filters.parentId) query.parentId = filters.parentId;
+    if (filters.childId) query.childId = filters.childId;
+
+    const [rawData, total] = await Promise.all([
+      this.subscriptionModel
+        .find(query)
+        .populate('childId', 'nom prenom photoProfil')
+        .populate('parentId', 'nom prenom email phoneNumber')
+        .populate('offerId', 'name price durationDays')
+        .sort(sort)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean()
+        .exec(),
       this.subscriptionModel.countDocuments(query),
     ]);
-    return { data, total, page, limit };
+
+    // Filtrage de sécurité : si un parent, un enfant ou une offre a été supprimé de la base
+    // mais que l'abonnement existe encore, on ne l'envoie pas au mobile pour éviter un crash.
+    const data = rawData.filter(sub => sub.childId && sub.parentId && sub.offerId);
+    const displayedTotal = data.length !== rawData.length ? data.length : total;
+
+    return {
+      data,
+      total: displayedTotal,
+      page,
+      limit,
+      totalPages: Math.ceil(displayedTotal / limit),
+    };
+  }
+
+  async recordPayment(id: string, dto: RecordPaymentDto, actor: { userId: string; role: UserRole }) {
+    const sub = await this.subscriptionModel.findById(id).exec();
+    if (!sub) throw new NotFoundException('Abonnement introuvable');
+    if (![UserRole.PARENT, UserRole.ACADEMIE].includes(actor.role)) throw new ForbiddenException('Accès refusé');
+    if (actor.role === UserRole.PARENT && sub.parentId.toString() !== actor.userId) throw new ForbiddenException('Accès refusé');
+
+    // Logique standard d'ajout de transaction
+    sub.transactions.push({
+      amount: dto.amount,
+      currency: dto.currency || 'TND',
+      method: dto.method,
+      externalRef: dto.externalRef,
+      date: dto.date ? new Date(dto.date) : new Date(),
+      status: 'SUCCESS',
+    });
+
+    const offer = await this.offersService.findOne(sub.offerId.toString()).catch(() => null);
+    if (!offer) {
+      throw new NotFoundException('Impossible d\'enregistrer le paiement : l\'offre associée à cet abonnement n\'existe plus.');
+    }
+    const totalPrice = this.calculateTotalPrice(offer, sub.selectedOptions);
+    const totalPaid = sub.transactions.filter(t => t.status === 'SUCCESS').reduce((sum, t) => sum + t.amount, 0);
+
+    if (totalPaid >= totalPrice) sub.paymentStatus = PaymentStatus.PAID;
+    else if (totalPaid > 0) sub.paymentStatus = PaymentStatus.PARTIAL;
+
+    if (sub.paymentStatus === PaymentStatus.PAID && sub.status === SubscriptionStatus.PENDING) {
+      sub.status = SubscriptionStatus.ACTIVE;
+    }
+
+    const savedSub = await sub.save();
+
+    if (sub.paymentStatus === PaymentStatus.PAID) {
+      this.sendConfirmationEmail(savedSub, offer, totalPaid);
+    }
+
+    return savedSub;
+  }
+
+  private computeEndDate(start: Date, offer: OfferDocument): Date {
+    const end = new Date(start);
+    end.setDate(end.getDate() + offer.durationDays - 1);
+    return end;
   }
 
   async findMine(actor: { userId: string; role: UserRole }) {
@@ -127,31 +266,41 @@ export class SubscriptionsService {
       .find({ parentId: actor.userId })
       .populate('offerId')
       .populate('childId')
+      .lean()
       .exec();
-    return data;
+
+    const filtered = data.filter(sub => sub.childId && sub.offerId);
+    return filtered;
   }
 
   async findByChild(childId: string, actor: { userId: string; role: UserRole }) {
-    if ([UserRole.PARENT].includes(actor.role)) {
+    if (actor.role === UserRole.PARENT) {
       const child = await this.usersService.findById(childId);
       if (!child) throw new NotFoundException('Enfant non trouvé');
       const parentId = this.extractParentId(child);
-      const actorId = String(actor.userId).trim();
-      if (!parentId || parentId.trim() !== actorId) {
+      if (!parentId || parentId.trim() !== String(actor.userId).trim()) {
         throw new ForbiddenException('Accès refusé pour cet enfant');
       }
     } else if (![UserRole.COACH, UserRole.ACADEMIE, UserRole.ADMIN].includes(actor.role)) {
       throw new ForbiddenException('Accès refusé');
     }
 
-    return this.subscriptionModel
+    const data = await this.subscriptionModel
       .find({ childId })
       .populate('offerId')
       .populate('childId')
+      .lean()
       .exec();
+
+
+    const filtered = data.filter(sub => sub.childId && sub.offerId);
+    return filtered;
   }
 
   async findOne(id: string, actor: { userId: string; role: UserRole }) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('Abonnement introuvable (ID invalide)');
+    }
     const sub = await this.subscriptionModel.findById(id).exec();
     if (!sub) throw new NotFoundException('Abonnement introuvable');
     if (actor.role === UserRole.PARENT && sub.parentId.toString() !== actor.userId) {
@@ -160,128 +309,33 @@ export class SubscriptionsService {
     return sub;
   }
 
-  private ensureStatusTransition(current: SubscriptionStatus, next: SubscriptionStatus) {
-    const allowed: Record<SubscriptionStatus, SubscriptionStatus[]> = {
-      [SubscriptionStatus.PENDING]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.CANCELLED],
-      [SubscriptionStatus.ACTIVE]: [SubscriptionStatus.SUSPENDED, SubscriptionStatus.CANCELLED, SubscriptionStatus.EXPIRED],
-      [SubscriptionStatus.SUSPENDED]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.CANCELLED],
-      [SubscriptionStatus.CANCELLED]: [],
-      [SubscriptionStatus.EXPIRED]: [],
-    };
-    if (!allowed[current].includes(next)) {
-      throw new ConflictException(`Transition de statut invalide: ${current} -> ${next}`);
-    }
-  }
-
   async update(id: string, dto: UpdateSubscriptionDto, actor: { userId: string; role: UserRole }) {
-    const sub = await this.subscriptionModel.findById(id).populate('offerId').exec();
+    const sub = await this.subscriptionModel.findById(id).exec();
     if (!sub) throw new NotFoundException('Abonnement introuvable');
-
-    // Check if subscription is cancelled (cannot be modified)
-    if (sub.status === SubscriptionStatus.CANCELLED) {
-      throw new ConflictException('Un abonnement annulé ne peut pas être modifié');
-    }
 
     if (actor.role === UserRole.PARENT) {
       if (sub.parentId.toString() !== actor.userId) throw new ForbiddenException('Accès refusé');
-      
-      // Parent may update autoRenew, notes, and startDate
-      if (dto.status != null || dto.paymentStatus != null) {
-        throw new ForbiddenException('Le parent ne peut pas modifier status/paymentStatus');
-      }
-
-      // Update startDate if provided
-      if (dto.startDate != null) {
-        const newStartDate = new Date(dto.startDate);
-        this.assertFutureOrToday(newStartDate);
-        
-        // Recalculate endDate based on the offer's duration
-        let offerId: string;
-        if (typeof sub.offerId === 'object' && sub.offerId !== null && '_id' in sub.offerId) {
-          offerId = (sub.offerId as any)._id.toString();
-        } else {
-          offerId = String(sub.offerId);
+      if (dto.autoRenew !== undefined) sub.autoRenew = dto.autoRenew;
+      if (dto.notes !== undefined) sub.notes = dto.notes;
+      if (dto.startDate !== undefined) {
+        sub.startDate = new Date(dto.startDate);
+        const offer = await this.offersService.findOne(sub.offerId.toString()).catch(() => null);
+        if (offer) {
+          sub.endDate = this.computeEndDate(sub.startDate, offer);
         }
-        const offer = await this.offersService.findOne(offerId);
-        if (!offer) throw new NotFoundException('Offre non trouvée');
-        
-        sub.startDate = newStartDate;
-        sub.endDate = this.computeEndDate(newStartDate, offer);
       }
-
-      if (dto.autoRenew != null) sub.autoRenew = dto.autoRenew;
-      if (dto.notes != null) sub.notes = dto.notes;
-      
-      return sub.save();
-    }
-
-    if (![UserRole.ADMIN, UserRole.ACADEMIE].includes(actor.role)) {
-      throw new ForbiddenException('Accès refusé');
-    }
-
-    // Admin/Academy can update all fields
-    if (dto.status && dto.status !== sub.status) {
-      this.ensureStatusTransition(sub.status, dto.status);
-      sub.status = dto.status;
-    }
-
-    if (dto.paymentStatus && dto.paymentStatus !== sub.paymentStatus) {
-      sub.paymentStatus = dto.paymentStatus;
-    }
-
-    // Update startDate if provided (for admin/academy)
-    if (dto.startDate != null) {
-      const newStartDate = new Date(dto.startDate);
-      this.assertFutureOrToday(newStartDate);
-      
-      // Recalculate endDate based on the offer's duration
-      let offerId: string;
-      if (typeof sub.offerId === 'object' && sub.offerId !== null && '_id' in sub.offerId) {
-        offerId = (sub.offerId as any)._id.toString();
-      } else {
-        offerId = String(sub.offerId);
+    } else if ([UserRole.ACADEMIE, UserRole.ADMIN].includes(actor.role)) {
+      if (dto.status) sub.status = dto.status;
+      if (dto.paymentStatus) sub.paymentStatus = dto.paymentStatus;
+      if (dto.autoRenew !== undefined) sub.autoRenew = dto.autoRenew;
+      if (dto.notes !== undefined) sub.notes = dto.notes;
+      if (dto.startDate !== undefined) {
+        sub.startDate = new Date(dto.startDate);
+        const offer = await this.offersService.findOne(sub.offerId.toString()).catch(() => null);
+        if (offer) {
+          sub.endDate = this.computeEndDate(sub.startDate, offer);
+        }
       }
-      const offer = await this.offersService.findOne(offerId);
-      if (!offer) throw new NotFoundException('Offre non trouvée');
-      
-      sub.startDate = newStartDate;
-      sub.endDate = this.computeEndDate(newStartDate, offer);
-    }
-
-    if (dto.autoRenew != null) sub.autoRenew = dto.autoRenew;
-    if (dto.notes != null) sub.notes = dto.notes;
-
-    return sub.save();
-  }
-
-  async recordPayment(id: string, dto: RecordPaymentDto, actor: { userId: string; role: UserRole }) {
-    const sub = await this.subscriptionModel.findById(id).exec();
-    if (!sub) throw new NotFoundException('Abonnement introuvable');
-    if (![UserRole.PARENT, UserRole.ACADEMIE].includes(actor.role)) throw new ForbiddenException('Accès refusé');
-    if (actor.role === UserRole.PARENT && sub.parentId.toString() !== actor.userId) throw new ForbiddenException('Accès refusé');
-    if (sub.status === SubscriptionStatus.CANCELLED) throw new ConflictException('Abonnement annulé');
-
-    const tx = {
-      amount: dto.amount,
-      currency: dto.currency,
-      method: dto.method,
-      externalRef: dto.externalRef,
-      date: dto.date ? new Date(dto.date) : new Date(),
-      status: 'SUCCESS' as const,
-    };
-    sub.transactions.push(tx as any);
-
-    // Compute net price
-    const offer = await this.offersService.findOne(sub.offerId.toString());
-    const netPrice = offer.price * (1 - (offer.discountPct || 0) / 100);
-    const totalPaid = sub.transactions.filter(t => t.status === 'SUCCESS').reduce((sum, t) => sum + t.amount, 0);
-    if (totalPaid >= netPrice) sub.paymentStatus = PaymentStatus.PAID;
-    else if (totalPaid > 0) sub.paymentStatus = PaymentStatus.PARTIAL;
-    else sub.paymentStatus = PaymentStatus.UNPAID;
-
-    // Activate when paid and currently pending
-    if (sub.paymentStatus === PaymentStatus.PAID && sub.status === SubscriptionStatus.PENDING) {
-      sub.status = SubscriptionStatus.ACTIVE;
     }
 
     return sub.save();
@@ -290,9 +344,8 @@ export class SubscriptionsService {
   async cancel(id: string, actor: { userId: string; role: UserRole }) {
     const sub = await this.subscriptionModel.findById(id).exec();
     if (!sub) throw new NotFoundException('Abonnement introuvable');
-    if (![UserRole.PARENT, UserRole.ACADEMIE, UserRole.ADMIN].includes(actor.role)) throw new ForbiddenException('Accès refusé');
     if (actor.role === UserRole.PARENT && sub.parentId.toString() !== actor.userId) throw new ForbiddenException('Accès refusé');
-    if (sub.status === SubscriptionStatus.CANCELLED) throw new ConflictException('Déjà annulé');
+
     sub.status = SubscriptionStatus.CANCELLED;
     return sub.save();
   }
@@ -318,15 +371,11 @@ export class SubscriptionsService {
   async renew(id: string, actor: { userId: string; role: UserRole }) {
     const sub = await this.subscriptionModel.findById(id).exec();
     if (!sub) throw new NotFoundException('Abonnement introuvable');
-    if (![UserRole.PARENT, UserRole.ACADEMIE, UserRole.ADMIN].includes(actor.role)) throw new ForbiddenException('Accès refusé');
-    if (actor.role === UserRole.PARENT && sub.parentId.toString() !== actor.userId) throw new ForbiddenException('Accès refusé');
-    if (!sub.autoRenew) throw new ConflictException('autoRenew est désactivé');
-    if (sub.paymentStatus !== PaymentStatus.PAID) throw new ConflictException('Paiement incomplet');
 
-    const offer = await this.offersService.findOne(sub.offerId.toString());
-    const newEnd = this.computeEndDate(new Date(sub.endDate), offer);
-    // Extend by durationDays
-    sub.endDate = newEnd;
+    const offer = await this.offersService.findOne(sub.offerId.toString()).catch(() => null);
+    if (!offer) throw new NotFoundException('Impossible de renouveler : l\'offre n\'existe plus.');
+
+    sub.endDate = this.computeEndDate(sub.endDate, offer);
     return sub.save();
   }
 }

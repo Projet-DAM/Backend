@@ -21,47 +21,20 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true;
     }
 
+    try {
+      // First check authentication (JWT validity)
+      const isAuthenticated = await super.canActivate(context) as boolean;
+      if (!isAuthenticated) {
+        throw new UnauthorizedException('Token invalide ou expiré');
+      }
+    } catch (err) {
+      throw new UnauthorizedException('Token invalide ou expiré');
+    }
+
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-
-    try {
-      const isAuthenticated = await super.canActivate(context) as boolean;
-      
-      if (!isAuthenticated) {
-        throw new UnauthorizedException('Token invalide ou expiré. Vérifiez que le token est correctement envoyé dans le header Authorization: Bearer <token>');
-      }
-
-      if (!requiredRoles) {
-        return true;
-      }
-
-      const request = context.switchToHttp().getRequest();
-      const user = request.user;
-
-      if (!user) {
-        throw new UnauthorizedException('Utilisateur non authentifié. Le token n\'a pas pu être validé.');
-      }
-
-      const hasRole = requiredRoles.some((role) => user.role === role);
-      
-      if (!hasRole) {
-        throw new ForbiddenException(`Accès refusé : rôle insuffisant. Rôle requis: ${requiredRoles.join(' ou ')}, Rôle actuel: ${user.role}`);
-      }
-    } catch (error) {
-      if (error instanceof UnauthorizedException || error instanceof ForbiddenException) {
-        throw error;
-      }
-      throw new UnauthorizedException(`Erreur d'authentification: ${error.message}`);
-        throw new UnauthorizedException('Token invalide ou expiré');
-      }
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      throw new UnauthorizedException('Token invalide ou expiré');
-    }
 
     if (!requiredRoles) {
       return true;
@@ -75,9 +48,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
 
     const hasRole = requiredRoles.some((role) => user.role === role);
-    
+
     if (!hasRole) {
-      throw new ForbiddenException('Accès refusé : rôle insuffisant');
+      throw new ForbiddenException(`Accès refusé : rôle insuffisant. Rôle requis: ${requiredRoles.join(' ou ')}`);
     }
 
     return true;

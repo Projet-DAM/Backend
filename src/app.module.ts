@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -18,6 +19,9 @@ import { EquipeModule } from './equipes/equipe.module';
 import { MatchesModule } from './matches/matches.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { NotificationModule } from './notifications/notification.module';
+import { SubscriptionOptionsModule } from './subscription-options/subscription-options.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -25,6 +29,7 @@ import { NotificationModule } from './notifications/notification.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/sportyconnect'),
     UsersModule,
     AuthModule,
@@ -40,8 +45,11 @@ import { NotificationModule } from './notifications/notification.module';
     MatchesModule,
     FirebaseModule,
     NotificationModule,
+    SubscriptionOptionsModule,
+    ChatbotModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

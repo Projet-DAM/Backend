@@ -1,33 +1,74 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsString, IsOptional, Min } from 'class-validator';
+import { IsArray, IsNumber, IsString, IsOptional, Min, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreatePaymentIntentDto {
-  @ApiProperty({ example: 10000, description: 'Montant en centimes (ex: 10000 = 100.00 €)' })
+  @ApiProperty({ example: 70000, required: false })
   @IsNumber()
-  @Min(1)
-  amount: number;
+  @IsOptional()
+  @Type(() => Number)
+  amount?: number;
 
-  @ApiProperty({ example: 'eur', description: 'Devise (par défaut: eur)', required: false })
+  @ApiProperty({ example: 'eur', required: false })
   @IsString()
   @IsOptional()
-  currency?: string = 'eur';
+  currency?: string;
 
-  @ApiProperty({ example: 'pm_1234567890', description: 'ID de la méthode de paiement Stripe' })
+  // CamelCase
   @IsString()
-  paymentMethodId: string;
+  @IsOptional()
+  paymentMethodId?: string;
 
-  @ApiProperty({ example: 'sub_1234567890', description: 'ID de l\'abonnement (optionnel)', required: false })
   @IsString()
   @IsOptional()
   subscriptionId?: string;
+
+  @IsString()
+  @IsOptional()
+  phoneNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  childId?: string;
+
+  @IsString()
+  @IsOptional()
+  offerId?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  selectedOptions?: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  @Type(() => Boolean)
+  autoRenew?: boolean;
+
+  // SnakeCase (Aliases)
+  @IsString()
+  @IsOptional()
+  payment_method_id?: string;
+
+  @IsString()
+  @IsOptional()
+  phone_number?: string;
+
+  @IsString()
+  @IsOptional()
+  child_id?: string;
+
+  @IsString()
+  @IsOptional()
+  offer_id?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  selected_options?: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  @Type(() => Boolean)
+  auto_renew?: boolean;
 }
-
-
-
-
-
-
-
-
-
-

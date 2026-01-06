@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Votre abonnement expire bientôt</title>
+</head>
+
+<body
+  style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); min-height: 100vh;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <!-- Main Container -->
+        <table width="600" cellpadding="0" cellspacing="0"
+          style="background-color: #ffffff; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); overflow: hidden;">
+
+          <!-- Header with Icon -->
+          <tr>
+            <td
+              style="padding: 50px 40px; text-align: center; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); position: relative;">
+              <div
+                style="width: 80px; height: 80px; background-color: rgba(255,255,255,0.2); border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+                <svg width="50" height="50" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" />
+                  <path d="M12 6v6l4 2" stroke="white" stroke-width="2" stroke-linecap="round" />
+                </svg>
+              </div>
+              <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">Votre
+                abonnement expire bientôt</h1>
+              <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">Ne manquez pas l'occasion de
+                renouveler</p>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 50px 40px;">
+              <p style="margin: 0 0 10px 0; font-size: 18px; color: #333333;">
+                Bonjour <strong style="color: #f5576c;">{{parentName}}</strong>,
+              </p>
+
+              <p style="margin: 0 0 35px 0; font-size: 16px; color: #666666; line-height: 1.6;">
+                L'abonnement de <strong style="color: #333;">{{childName}}</strong> pour l'offre <strong
+                  style="color: #333;">{{offerName}}</strong> expire dans <strong
+                  style="color: #f5576c;">{{daysRemaining}} jour(s)</strong>.
+              </p>
+
+              <!-- Alert Card -->
+              <table width="100%" cellpadding="0" cellspacing="0"
+                style="background: linear-gradient(135deg, #fff8f0 0%, #fff3e0 100%); border-radius: 15px; border: 2px solid #ffe0b2; margin: 30px 0; overflow: hidden;">
+                <tr>
+                  <td style="padding: 30px;">
+                    <h3
+                      style="margin: 0 0 20px 0; color: #ff6f00; font-size: 20px; font-weight: 600; display: flex; align-items: center;">
+                      <span
+                        style="width: 6px; height: 24px; background: linear-gradient(135deg, #FF9800 0%, #ff6f00 100%); border-radius: 3px; margin-right: 12px; display: inline-block;"></span>
+                      Détails de l'abonnement
+                    </h3>
+
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <!-- Enfant -->
+                      <tr>
+                        <td style="padding: 15px 0; border-bottom: 1px solid #ffe0b2;">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td
+                                style="font-size: 14px; color: #999999; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">
+                                Enfant</td>
+                              <td style="font-size: 16px; color: #333333; font-weight: 700; text-align: right;">
+                                {{childName}}</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <!-- Offre -->
+                      <tr>
+                        <td style="padding: 15px 0; border-bottom: 1px solid #ffe0b2;">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td
+                                style="font-size: 14px; color: #999999; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">
+                                Offre</td>
+                              <td style="font-size: 16px; color: #333333; font-weight: 700; text-align: right;">
+                                {{offerName}}</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <!-- Expiration -->
+                      <tr>
+                        <td style="padding: 15px 0;">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td
+                                style="font-size: 14px; color: #999999; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">
+                                Expire le</td>
+                              <td style="font-size: 20px; color: #f5576c; font-weight: 800; text-align: right;">
+                                {{endDate}}</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Warning Message -->
+              <table width="100%" cellpadding="0" cellspacing="0"
+                style="background-color: #fff3e0; border-left: 4px solid #FF9800; border-radius: 8px; margin: 30px 0;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <p style="margin: 0; font-size: 15px; color: #e65100; line-height: 1.6;">
+                      <strong>⚠️ Attention !</strong> Pour continuer à profiter de nos services sans interruption,
+                      pensez à renouveler votre abonnement avant la date d'expiration.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Call to Action -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 35px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="{{renewUrl}}"
+                      style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: #ffffff; text-decoration: none; border-radius: 50px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4); transition: transform 0.3s;">
+                      Renouveler mon abonnement
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 30px 0 0 0; font-size: 15px; color: #999999; line-height: 1.6; text-align: center;">
+                Si vous avez des questions ou besoin d'assistance, n'hésitez pas à nous contacter.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding: 0 40px;">
+              <div style="height: 1px; background: linear-gradient(90deg, transparent, #e0e0e0, transparent);"></div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 40px; text-align: center; background-color: #fafafa;">
+              <p style="margin: 0 0 15px 0; font-size: 18px; color: #333333; font-weight: 600;">
+                Merci de votre confiance ! 💙
+              </p>
+              <p style="margin: 0 0 20px 0; font-size: 14px; color: #666666;">
+                <strong>L'équipe Académie Sportive</strong>
+              </p>
+
+              <!-- Social Links -->
+              <table cellpadding="0" cellspacing="0" style="margin: 20px auto 0;">
+                <tr>
+                  <td style="padding: 0 10px;">
+                    <a href="#"
+                      style="display: inline-block; width: 40px; height: 40px; background-color: #f5576c; border-radius: 50%; text-align: center; line-height: 40px; color: #ffffff; text-decoration: none; font-size: 18px;">f</a>
+                  </td>
+                  <td style="padding: 0 10px;">
+                    <a href="#"
+                      style="display: inline-block; width: 40px; height: 40px; background-color: #f5576c; border-radius: 50%; text-align: center; line-height: 40px; color: #ffffff; text-decoration: none; font-size: 18px;">in</a>
+                  </td>
+                  <td style="padding: 0 10px;">
+                    <a href="#"
+                      style="display: inline-block; width: 40px; height: 40px; background-color: #f5576c; border-radius: 50%; text-align: center; line-height: 40px; color: #ffffff; text-decoration: none; font-size: 18px;">@</a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 25px 0 0 0; font-size: 12px; color: #999999; line-height: 1.6;">
+                Académie Sportive © 2024 - Tous droits réservés<br>
+                123 Avenue du Sport, 75000 Paris, France<br>
+                <a href="#" style="color: #f5576c; text-decoration: none;">Se désabonner</a> | <a href="#"
+                  style="color: #f5576c; text-decoration: none;">Politique de confidentialité</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+
+</html>

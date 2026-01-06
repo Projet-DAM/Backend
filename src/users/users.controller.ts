@@ -22,11 +22,9 @@ import {
   UnsupportedMediaTypeException,
   HttpCode,
   HttpStatus,
-  UseGuards,
   Request,
-  ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
+import { Roles } from '../common/decorators/roles.decorator';
 import { Types } from 'mongoose';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -61,7 +59,7 @@ import { ImageFileValidator } from './validators/image-file.validator';
 @Controller('users')
 @ApiBearerAuth('JWT-auth')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   private readonly logger = new Logger(UsersController.name);
 
@@ -157,10 +155,11 @@ export class UsersController {
     }
     // caller must be PARENT (Roles decorator enforces it) — pass tokenUserId as parent
     return this.usersService.createChildForParent(tokenUserId, createChildDto);
+  }
   // Helper pour transformer UserDocument en format compatible Android
   private transformUserForResponse(user: any): any {
     if (!user) return null;
-    
+
     const transformed: any = {
       id: user._id?.toString() || user.id,
       email: user.email || null,
@@ -172,8 +171,8 @@ export class UsersController {
 
     // Transformer dateNaissance de Date à string (YYYY-MM-DD)
     if (user.dateNaissance) {
-      const date = user.dateNaissance instanceof Date 
-        ? user.dateNaissance 
+      const date = user.dateNaissance instanceof Date
+        ? user.dateNaissance
         : new Date(user.dateNaissance);
       transformed.dateNaissance = date.toISOString().split('T')[0];
     } else {
@@ -239,58 +238,8 @@ export class UsersController {
 
     const user = await this.usersService.create(createUserDto);
     return this.transformUserForResponse(user);
-  @Roles(UserRole.ACADEMIE)
-  @ApiOperation({ summary: 'Créer un nouvel utilisateur (Académie uniquement)' })
-  @ApiBody({ type: CreateUserDto })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'Utilisateur créé avec succès',
-    type: UserResponseDto
-  })
-  @ApiBadRequestResponse({ 
-    description: 'Données invalides',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: ['email must be an email', 'motDePasse must be longer than or equal to 6 characters'],
-        error: 'Bad Request'
-      }
-    }
-  })
-  @ApiUnauthorizedResponse({ 
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized'
-      }
-    }
-  })
-  @ApiForbiddenResponse({ 
-    description: 'Accès refusé : rôle insuffisant (Académie requis)',
-    schema: {
-      example: {
-        statusCode: 403,
-        message: 'Accès refusé : rôle insuffisant',
-        error: 'Forbidden'
-      }
-    }
-  })
-  @ApiResponse({ 
-    status: 409, 
-    description: 'Email déjà utilisé',
-    schema: {
-      example: {
-        statusCode: 409,
-        message: 'Cet email est déjà utilisé',
-        error: 'Conflict'
-      }
-    }
-  })
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
   }
+
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -321,7 +270,7 @@ export class UsersController {
         parentId = currentUserId.toString();
         console.log(`[UsersController] parentId non fourni, utilisation de currentUserId: ${parentId}`);
       }
-      
+
       // Les parents ne peuvent voir que leurs propres enfants
       if (currentUserRole === UserRole.PARENT) {
         const parentIdStr = parentId?.toString();
@@ -331,7 +280,7 @@ export class UsersController {
           throw new ForbiddenException('Vous ne pouvez voir que vos propres enfants');
         }
       }
-      
+
       // Les coaches et academies peuvent voir tous les enfants
       if (currentUserRole === UserRole.COACH || currentUserRole === UserRole.ACADEMIE) {
         // Pas de restriction, peut voir tous les enfants
@@ -352,34 +301,8 @@ export class UsersController {
       console.log(`[UsersController] Enfants trouvés:`, users.map(u => ({ id: u._id, nom: u.nom, prenom: u.prenom, parent: u.parent })));
     }
     return this.transformUsersForResponse(users);
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Liste des utilisateurs',
-    type: [UserResponseDto]
-  })
-  @ApiUnauthorizedResponse({ 
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized'
-      }
-    }
-  })
-  @ApiForbiddenResponse({ 
-    description: 'Accès refusé : rôle insuffisant (Académie requis)',
-    schema: {
-      example: {
-        statusCode: 403,
-        message: 'Accès refusé : rôle insuffisant',
-        error: 'Forbidden'
-      }
-    }
-  })
-  findAll(@Query('role') role?: UserRole) {
-    return this.usersService.findAll(role);
   }
+
 
   @Get('enfants')
   @Roles(UserRole.COACH, UserRole.ACADEMIE, UserRole.PARENT)
@@ -471,45 +394,8 @@ export class UsersController {
     }
 
     return this.transformUserForResponse(user);
-  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Utilisateur trouvé',
-    type: UserResponseDto
-  })
-  @ApiBadRequestResponse({ 
-    description: 'ID invalide',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: 'ID invalide',
-        error: 'Bad Request'
-      }
-    }
-  })
-  @ApiUnauthorizedResponse({ 
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized'
-      }
-    }
-  })
-  @ApiNotFoundResponse({ 
-    description: 'Utilisateur non trouvé',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Utilisateur non trouvé',
-        error: 'Not Found'
-      }
-    }
-  })
-  findOne(@Param('id') id: string) {
-    return this.usersService.findById(id);
   }
+
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
@@ -554,23 +440,23 @@ export class UsersController {
         // Si c'est un objet peuplé avec _id
         if (typeof existingUser.parent === 'object' && existingUser.parent._id) {
           childParentId = existingUser.parent._id.toString();
-        } 
+        }
         // Si c'est un ObjectId (non peuplé)
         else if (existingUser.parent.toString) {
           childParentId = existingUser.parent.toString();
-        } 
+        }
         // Sinon convertir en string
         else {
           childParentId = String(existingUser.parent);
         }
       }
-      
+
       // Normaliser currentUserId en string (s'assurer que c'est bien une string)
       const currentUserIdStr = String(currentUserId).trim();
       const childParentIdStr = childParentId ? childParentId.trim() : null;
-      
+
       console.log(`[UsersController] update - childParentId: ${childParentIdStr}, currentUserIdStr: ${currentUserIdStr}, currentUserRole: ${currentUserRole}, existingUser.parent type: ${typeof existingUser.parent}`);
-      
+
       // Les parents ne peuvent modifier que leurs propres enfants
       if (currentUserRole === UserRole.PARENT) {
         if (!childParentIdStr || childParentIdStr !== currentUserIdStr) {
@@ -626,10 +512,10 @@ export class UsersController {
           childParentId = String(user.parent);
         }
       }
-      
+
       // Normaliser currentUserId en string
       const currentUserIdStr = String(currentUserId);
-      
+
       // Les parents ne peuvent supprimer que leurs propres enfants
       if (currentUserRole === UserRole.PARENT) {
         if (childParentId !== currentUserIdStr) {
@@ -650,121 +536,22 @@ export class UsersController {
       }
     }
 
-  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
-  @ApiBody({ type: UpdateUserDto })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Utilisateur mis à jour',
-    type: UserResponseDto
-  })
-  @ApiBadRequestResponse({ 
-    description: 'Données invalides',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: ['email must be an email'],
-        error: 'Bad Request'
-      }
-    }
-  })
-  @ApiUnauthorizedResponse({ 
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized'
-      }
-    }
-  })
-  @ApiNotFoundResponse({ 
-    description: 'Utilisateur non trouvé',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Utilisateur non trouvé',
-        error: 'Not Found'
-      }
-    }
-  })
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+    return this.usersService.remove(id);
   }
 
-  @Delete(':id')
-  @Roles(UserRole.PARENT)
-  @ApiOperation({ summary: 'Supprimer un utilisateur (Académie uniquement)' })
-  @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Utilisateur supprimé',
-    schema: {
-      example: {
-        message: 'Utilisateur supprimé avec succès'
-      }
-    }
-  })
-  @ApiBadRequestResponse({ 
-    description: 'ID invalide',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: 'ID invalide',
-        error: 'Bad Request'
-      }
-    }
-  })
-  @ApiUnauthorizedResponse({ 
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized'
-      }
-    }
-  })
-  @ApiForbiddenResponse({ 
-    description: 'Accès refusé : rôle insuffisant (Académie requis)',
-    schema: {
-      example: {
-        statusCode: 403,
-        message: 'Accès refusé : rôle insuffisant',
-        error: 'Forbidden'
-      }
-    }
-  })
-  @ApiNotFoundResponse({ 
-    description: 'Utilisateur non trouvé',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Utilisateur non trouvé',
-        error: 'Not Found'
-      }
-    }
-  })
-  remove(@Param('id') id: string) {
-    // sanitize and validate the incoming id (clients sometimes include trailing spaces)
-    const raw = id || '';
-    const decoded = decodeURIComponent(raw).trim();
-    if (!decoded || !Types.ObjectId.isValid(decoded)) {
-      throw new BadRequestException('id invalide');
-    }
-    return this.usersService.remove(decoded);
-  }
+
 
   @Post(':id/link-child')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Lier un enfant à un parent' })
   @ApiParam({ name: 'id', description: 'ID du parent (MongoDB ObjectId)' })
   @ApiBody({ type: LinkChildDto })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Enfant lié avec succès',
     type: UserResponseDto
   })
-  @ApiBadRequestResponse({ 
+  @ApiBadRequestResponse({
     description: 'Erreur de validation ou ID invalide',
     schema: {
       example: {
@@ -774,7 +561,7 @@ export class UsersController {
       }
     }
   })
-  @ApiUnauthorizedResponse({ 
+  @ApiUnauthorizedResponse({
     description: 'Token JWT manquant ou invalide',
     schema: {
       example: {
@@ -784,7 +571,7 @@ export class UsersController {
       }
     }
   })
-  @ApiForbiddenResponse({ 
+  @ApiForbiddenResponse({
     description: 'Accès refusé : rôle insuffisant (Parent requis)',
     schema: {
       example: {
@@ -804,31 +591,20 @@ export class UsersController {
       throw new ForbiddenException('Seuls les parents peuvent lier des enfants');
     }
     return this.usersService.linkChild(id, childId);
-  @ApiNotFoundResponse({ 
-    description: 'Parent ou enfant non trouvé',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Parent ou enfant non trouvé',
-        error: 'Not Found'
-      }
-    }
-  })
-  linkChild(@Param('id') id: string, @Body() linkChildDto: LinkChildDto) {
-    return this.usersService.linkChild(id, linkChildDto.childId);
   }
+
 
   @Get(':parentId/children/:childId')
   @Roles(UserRole.PARENT)
   @ApiOperation({ summary: 'Récupérer un enfant spécifique avec vérification d\'appartenance' })
   @ApiParam({ name: 'parentId', description: 'ID du parent (MongoDB ObjectId)' })
   @ApiParam({ name: 'childId', description: 'ID de l\'enfant (MongoDB ObjectId)' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Enfant trouvé',
     type: UserResponseDto
   })
-  @ApiBadRequestResponse({ 
+  @ApiBadRequestResponse({
     description: 'ID invalide ou enfant n\'appartient pas au parent',
     schema: {
       example: {
@@ -838,7 +614,7 @@ export class UsersController {
       }
     }
   })
-  @ApiUnauthorizedResponse({ 
+  @ApiUnauthorizedResponse({
     description: 'Token JWT manquant ou invalide',
     schema: {
       example: {
@@ -848,7 +624,7 @@ export class UsersController {
       }
     }
   })
-  @ApiForbiddenResponse({ 
+  @ApiForbiddenResponse({
     description: 'Accès refusé : rôle insuffisant (Parent requis)',
     schema: {
       example: {
@@ -858,7 +634,7 @@ export class UsersController {
       }
     }
   })
-  @ApiNotFoundResponse({ 
+  @ApiNotFoundResponse({
     description: 'Parent ou enfant non trouvé',
     schema: {
       example: {
@@ -899,122 +675,10 @@ export class UsersController {
       this.logger.error(`Error in getChildren: ${err?.message}`);
       throw err;
     }
-  @ApiResponse({ status: 404, description: 'Parent non trouvé' })
-  @ApiResponse({ status: 403, description: 'Accès refusé' })
-  async getChildren(@Param('id') id: string, @Request() req) {
-    const currentUserRole = req.user?.role;
-    const currentUserId = req.user?.sub;
-    
-    // Les parents ne peuvent voir que leurs propres enfants
-    if (currentUserRole === UserRole.PARENT && id !== currentUserId) {
-      throw new ForbiddenException('Vous ne pouvez voir que vos propres enfants');
-    }
-    // Les coaches et academies peuvent voir tous les enfants
-    const children = await this.usersService.getChildren(id);
-    return this.transformUsersForResponse(children);
-  @ApiParam({ name: 'id', description: 'ID du parent (MongoDB ObjectId)' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Liste des enfants',
-    type: [UserResponseDto]
-  })
-  @ApiBadRequestResponse({ 
-    description: 'ID invalide',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: 'ID invalide',
-        error: 'Bad Request'
-      }
-    }
-  })
-  @ApiUnauthorizedResponse({ 
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized'
-      }
-    }
-  })
-  @ApiForbiddenResponse({ 
-    description: 'Accès refusé : rôle insuffisant (Parent requis)',
-    schema: {
-      example: {
-        statusCode: 403,
-        message: 'Accès refusé : rôle insuffisant',
-        error: 'Forbidden'
-      }
-    }
-  })
-  @ApiNotFoundResponse({ 
-    description: 'Parent non trouvé',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Parent non trouvé',
-        error: 'Not Found'
-      }
-    }
-  })
-  getChildren(@Param('id') id: string) {
-    return this.usersService.getChildren(id);
   }
 
-  @Post(':id/children')
-  @Roles(UserRole.PARENT)
-  @ApiOperation({ summary: 'Créer un nouvel enfant pour un parent' })
-  @ApiParam({ name: 'id', description: 'ID du parent (MongoDB ObjectId)' })
-  @ApiBody({ type: CreateChildDto })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'Enfant créé avec succès',
-    type: UserResponseDto
-  })
-  @ApiBadRequestResponse({ 
-    description: 'Erreur de validation ou ID invalide',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: ['prenom must be a string', 'sportPratique must be a valid enum value'],
-        error: 'Bad Request'
-      }
-    }
-  })
-  @ApiUnauthorizedResponse({ 
-    description: 'Token JWT manquant ou invalide',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Token invalide ou expiré',
-        error: 'Unauthorized'
-      }
-    }
-  })
-  @ApiForbiddenResponse({ 
-    description: 'Accès refusé : rôle insuffisant (Parent requis)',
-    schema: {
-      example: {
-        statusCode: 403,
-        message: 'Accès refusé : rôle insuffisant',
-        error: 'Forbidden'
-      }
-    }
-  })
-  @ApiNotFoundResponse({ 
-    description: 'Parent non trouvé',
-    schema: {
-      example: {
-        statusCode: 404,
-        message: 'Parent non trouvé',
-        error: 'Not Found'
-      }
-    }
-  })
-  createChild(@Param('id') id: string, @Body() createChildDto: CreateChildDto) {
-    return this.usersService.createChild(id, createChildDto);
-  }
+
+
 
   @Post(':id/upload-photo')
   @UseGuards(JwtAuthGuard)
@@ -1048,12 +712,12 @@ export class UsersController {
     },
   })
   @ApiParam({ name: 'id', description: 'ID de l\'utilisateur (MongoDB ObjectId)' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Photo uploadée avec succès',
     type: UserResponseDto
   })
-  @ApiBadRequestResponse({ 
+  @ApiBadRequestResponse({
     description: 'Fichier invalide, format non supporté, ou taille trop grande',
     schema: {
       example: {
@@ -1063,7 +727,7 @@ export class UsersController {
       }
     }
   })
-  @ApiUnauthorizedResponse({ 
+  @ApiUnauthorizedResponse({
     description: 'Token JWT manquant ou invalide',
     schema: {
       example: {
@@ -1073,7 +737,7 @@ export class UsersController {
       }
     }
   })
-  @ApiNotFoundResponse({ 
+  @ApiNotFoundResponse({
     description: 'Utilisateur non trouvé',
     schema: {
       example: {
@@ -1118,7 +782,7 @@ export class UsersController {
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       // remove uploaded file if present
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       throw new PayloadTooLargeException('Fichier trop volumineux');
     }
 
@@ -1143,7 +807,7 @@ export class UsersController {
     }
     if (!authorized) {
       // remove uploaded file if present
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       throw new ForbiddenException('Non autorisé à uploader cette photo');
     }
 
@@ -1158,11 +822,11 @@ export class UsersController {
       const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47;
       const isWebp = header.toString('ascii', 0, 4) === 'RIFF' && header.toString('ascii', 8, 12) === 'WEBP';
       if (!isJpeg && !isPng && !isWebp) {
-        try { fs.unlinkSync((file as any).path); } catch (e) {}
+        try { fs.unlinkSync((file as any).path); } catch (e) { }
         throw new UnsupportedMediaTypeException('Type de fichier non supporté');
       }
     } catch (err) {
-      try { fs.unlinkSync((file as any).path); } catch (e) {}
+      try { fs.unlinkSync((file as any).path); } catch (e) { }
       if (err instanceof UnsupportedMediaTypeException) throw err;
       throw new BadRequestException('Erreur lors de la validation du fichier');
     }
@@ -1175,7 +839,7 @@ export class UsersController {
       return { success: true, photoProfil: publicUrl, user: updated };
     } catch (e) {
       // remove file on error
-      try { fs.unlinkSync((file as any).path); } catch (err2) {}
+      try { fs.unlinkSync((file as any).path); } catch (err2) { }
       this.logger.error('Error saving photo URL to user', e?.message || e);
       throw new Error('Erreur interne lors de l\'upload');
     }

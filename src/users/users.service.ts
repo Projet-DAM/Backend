@@ -7,7 +7,7 @@ import { User, UserDocument } from './entity/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateChildDto } from './dto/create-child.dto';
-import { UserRole } from './interfaces/user-role.enum';
+
 
 @Injectable()
 export class UsersService {
@@ -15,7 +15,7 @@ export class UsersService {
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-  ) {}
+  ) { }
 
   async removeChild(childId: string, parentId: string): Promise<{ success: boolean; childId: string }> {
     if (!Types.ObjectId.isValid(childId)) {
@@ -93,7 +93,7 @@ export class UsersService {
       delete userData.adresse;
       delete userData.description;
       delete userData.horaires;
-      
+
       // Gérer le parentId si fourni
       if (createUserDto.parentId) {
         const parent = await this.userModel.findById(createUserDto.parentId);
@@ -168,21 +168,14 @@ export class UsersService {
     return savedUser;
   }
 
-  async findAll(role?: UserRole): Promise<UserDocument[]> {
-    const query = role ? { role } : {};
-    return this.userModel
-      .find(query)
-      .populate('enfants')
-      .populate('parent')
-      .populate('coach')
-      .exec();
+
   async findAll(filters?: { role?: UserRole; parentId?: string }): Promise<UserDocument[]> {
     const query: any = {};
-    
+
     if (filters?.role) {
       query.role = filters.role;
     }
-    
+
     if (filters?.parentId) {
       // Convertir parentId (string) en ObjectId pour la requête MongoDB
       try {
@@ -193,16 +186,16 @@ export class UsersService {
         throw new BadRequestException(`ID parent invalide: ${filters.parentId}`);
       }
     }
-    
+
     console.log(`[UsersService] findAll - Query:`, JSON.stringify(query));
     const users = await this.userModel.find(query).populate('enfants').populate('parent').exec();
     console.log(`[UsersService] findAll - Résultat: ${users.length} utilisateur(s) trouvé(s)`);
     if (filters?.role === UserRole.ENFANT && users.length > 0) {
-      console.log(`[UsersService] Détails des enfants:`, users.map(u => ({ 
-        id: u._id?.toString(), 
-        nom: u.nom, 
-        prenom: u.prenom, 
-        parent: u.parent?.toString() || u.parent 
+      console.log(`[UsersService] Détails des enfants:`, users.map(u => ({
+        id: u._id?.toString(),
+        nom: u.nom,
+        prenom: u.prenom,
+        parent: u.parent?.toString() || u.parent
       })));
     }
     return users;
@@ -364,9 +357,8 @@ export class UsersService {
     if (!Types.ObjectId.isValid(cleanId)) {
       throw new BadRequestException('id invalide');
     }
-    const result = await this.userModel.findByIdAndDelete(cleanId);
-    if (!result) {
-    const user = await this.userModel.findById(id);
+
+    const user = await this.userModel.findById(cleanId);
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
@@ -376,13 +368,13 @@ export class UsersService {
       const parent = await this.userModel.findById(user.parent);
       if (parent && parent.enfants) {
         parent.enfants = parent.enfants.filter(
-          (childId: any) => childId.toString() !== id
+          (childId: any) => childId.toString() !== cleanId
         );
         await parent.save();
       }
     }
 
-    await this.userModel.findByIdAndDelete(id);
+    await this.userModel.findByIdAndDelete(cleanId);
   }
 
   async linkChild(parentId: string, childId: string): Promise<UserDocument> {
@@ -551,6 +543,8 @@ export class UsersService {
       verificationCode: undefined,
       verificationCodeExpires: undefined,
     });
+  }
+
   async createChild(parentId: string, createChildDto: CreateChildDto): Promise<UserDocument> {
     const parent = await this.userModel.findById(parentId);
     if (!parent) {
@@ -580,7 +574,7 @@ export class UsersService {
     // Générer un email unique basé sur le parent et un timestamp
     const timestamp = Date.now();
     childData.email = `enfant_${parent._id}_${timestamp}@academie.local`;
-    
+
     // Générer un mot de passe temporaire (les enfants ne se connectent pas)
     childData.motDePasse = await bcrypt.hash(`temp_${timestamp}`, 10);
 

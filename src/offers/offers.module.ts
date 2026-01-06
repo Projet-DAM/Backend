@@ -16,6 +16,6 @@ import { Subscription, SubscriptionSchema } from '../subscriptions/schemas/subsc
   providers: [OffersService],
   exports: [OffersService],
 })
-export class OffersModule {}
+export class OffersModule { }
 
 

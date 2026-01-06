@@ -1,11 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import { EmailTemplateService } from './email-template.service';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private isUsingEthereal = false;
+
+  constructor(
+    @Inject(forwardRef(() => EmailTemplateService))
+    private templateService: EmailTemplateService
+  ) { }
 
   private async getTransporter(): Promise<nodemailer.Transporter> {
     // Si le transporter existe déjà, le retourner
@@ -17,10 +23,10 @@ export class EmailService {
     const smtpPass = process.env.SMTP_PASS?.trim();
     const smtpUser = process.env.SMTP_USER?.trim();
     const smtpHost = process.env.SMTP_HOST?.trim();
-    
+
     // Log pour déboguer (utiliser log au lieu de debug pour être sûr de voir les messages)
     this.logger.log(`📧 SMTP Configuration check: SMTP_PASS=${smtpPass ? '***SET***' : 'NOT SET'}, SMTP_USER=${smtpUser || 'NOT SET'}, SMTP_HOST=${smtpHost || 'NOT SET'}`);
-    
+
     if (!smtpPass || smtpPass === '' || !smtpUser || smtpUser === '') {
       // Mode développement : Si SMTP n'est pas configuré, utiliser Ethereal Email
       this.logger.warn('⚠️  SMTP non configuré, utilisation d\'Ethereal Email pour le développement');
@@ -29,7 +35,7 @@ export class EmailService {
         this.logger.log('🔄 Création d\'un compte Ethereal Email...');
         const testAccount = await nodemailer.createTestAccount();
         this.logger.log(`✅ Compte Ethereal créé: ${testAccount.user}`);
-        
+
         this.transporter = nodemailer.createTransport({
           host: 'smtp.ethereal.email',
           port: 587,
@@ -59,9 +65,9 @@ export class EmailService {
       // Configuration SMTP normale
       const smtpPort = parseInt(process.env.SMTP_PORT || '587');
       const isSecure = smtpPort === 465;
-      
+
       this.logger.log(`📧 Configuration SMTP: ${smtpHost || 'smtp.gmail.com'}:${smtpPort} (secure: ${isSecure})`);
-      
+
       this.transporter = nodemailer.createTransport({
         host: smtpHost || 'smtp.gmail.com',
         port: smtpPort,
@@ -127,7 +133,7 @@ export class EmailService {
       this.logger.log(`📤 Tentative d'envoi de l'email à ${email}...`);
       const info = await transporter.sendMail(mailOptions);
       this.logger.log(`✅ Code de vérification envoyé à ${email}. Message ID: ${info.messageId}`);
-      
+
       // Si on utilise Ethereal Email, afficher le lien de prévisualisation
       if (this.isUsingEthereal) {
         const previewUrl = nodemailer.getTestMessageUrl(info);
@@ -147,6 +153,38 @@ export class EmailService {
       // Ne pas afficher le code dans les logs, même en cas d'erreur
       throw error; // Relancer l'erreur pour que le service puisse la gérer
     }
+  }
+  async sendSubscriptionExpiring(email: string, parentName: string, childName: string, offerName: string, endDate: Date): Promise<void> {
+    const names = parentName.split(' ');
+    const prenom = names[0];
+    const nom = names.slice(1).join(' ') || '';
+
+    return this.templateService.sendSubscriptionExpiring(
+      email,
+      prenom,
+      nom,
+      childName,
+      offerName,
+      endDate.toLocaleDateString('fr-FR')
+    );
+  }
+
+  async sendPaymentConfirmation(email: string, parentName: string, offerName: string, amount: number, currency: string, startDate: Date, endDate: Date): Promise<void> {
+    const names = parentName.split(' ');
+    const prenom = names[0];
+    const nom = names.slice(1).join(' ') || '';
+
+    // On force l'affichage en TND comme demandé par l'utilisateur
+    // On garde le montant tel quel (Stripe donne le montant en unités principales ici car divisé par 100 dans le contrôleur)
+    return this.templateService.sendSubscriptionConfirmation(
+      email,
+      prenom,
+      nom,
+      offerName,
+      `${amount} TND`,
+      startDate.toLocaleDateString('fr-FR'),
+      endDate.toLocaleDateString('fr-FR')
+    );
   }
 }
 
