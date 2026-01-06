@@ -87,7 +87,8 @@ export class SuiviEnfantController {
   @ApiOperation({ summary: 'Obtenir un suivi par son id (PARENT, COACH, ACADEMIE)' })
   @ApiResponse({ status: 200, description: 'Détails du suivi' })
   findOne(@Param('id') id: string, @Req() req: any) {
-    return this.suiviEnfantService.findOne(id, req.user);
+    const trimmedId = id?.trim();
+    return this.suiviEnfantService.findOne(trimmedId, req.user);
   }
 
   @Get('enfant/:enfantId')
@@ -96,7 +97,8 @@ export class SuiviEnfantController {
   @ApiOperation({ summary: 'Lister tous les suivis d\'un enfant donné (PARENT, COACH, ACADEMIE)' })
   @ApiResponse({ status: 200, description: 'Liste des suivis de l\'enfant' })
   findByEnfant(@Param('enfantId') enfantId: string, @Req() req: any) {
-    return this.suiviEnfantService.findByEnfant(enfantId, req.user);
+    const trimmedId = enfantId?.trim();
+    return this.suiviEnfantService.findByEnfant(trimmedId, req.user);
   }
 
   @Get('coach/children')
@@ -126,7 +128,8 @@ export class SuiviEnfantController {
     }
 
     // never allow enfant/enfantId to be changed via PATCH
-    const updated = await this.suiviEnfantService.update(id, updatePayload, req.user);
+    const trimmedId = id?.trim();
+    const updated = await this.suiviEnfantService.update(trimmedId, updatePayload, req.user);
     return updated;
   }
 
@@ -138,6 +141,7 @@ export class SuiviEnfantController {
   @ApiResponse({ status: 200, description: 'Suivi supprimé' })
   @ApiResponse({ status: 403, description: 'Accès refusé : rôle COACH requis' })
   remove(@Param('id') id: string, @Req() req: any) {
-    return this.suiviEnfantService.remove(id, req.user);
+    const trimmedId = id?.trim();
+    return this.suiviEnfantService.remove(trimmedId, req.user);
   }
 }

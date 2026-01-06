@@ -1,14 +1,14 @@
 
-  import * as mongoose from 'mongoose';
+import * as mongoose from 'mongoose';
 
-  import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
-  import { InjectModel } from '@nestjs/mongoose';
-  import { Model, Types } from 'mongoose';
-  import { SuiviEnfant, SuiviEnfantDocument } from './suivi-enfant.schema';
-  import { CreateSuiviEnfantDto } from './dto/create-suivi-enfant.dto';
-  import { UpdateSuiviEnfantDto } from './dto/update-suivi-enfant.dto';
-  import { UsersService } from '../users/users.service';
-  import { UserRole } from '../users/interfaces/user-role.enum';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { SuiviEnfant, SuiviEnfantDocument } from './suivi-enfant.schema';
+import { CreateSuiviEnfantDto } from './dto/create-suivi-enfant.dto';
+import { UpdateSuiviEnfantDto } from './dto/update-suivi-enfant.dto';
+import { UsersService } from '../users/users.service';
+import { UserRole } from '../users/interfaces/user-role.enum';
 
 @Injectable()
 export class SuiviEnfantService {
@@ -17,9 +17,9 @@ export class SuiviEnfantService {
     @InjectModel(SuiviEnfant.name)
     private readonly suiviModel: Model<SuiviEnfantDocument>,
     private readonly usersService: UsersService
-  ) {}
+  ) { }
 
-    async getAvailableParents(userId: string): Promise<any[]> {
+  async getAvailableParents(userId: string): Promise<any[]> {
     try {
       if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
         throw new BadRequestException('id invalide');
@@ -72,23 +72,23 @@ export class SuiviEnfantService {
       this.logger.error('❌ Error in getAvailableParents:', error);
       throw error;
     }
-    }
+  }
 
-    async getAvailableCoaches(userId: string): Promise<any[]> {
-      if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-        throw new BadRequestException('id invalide');
-      }
-      const children = await this.usersService.getChildren(userId);
-      const childIds = children.map(child => child._id);
-      const suivis = await this.suiviModel.find({ enfant: { $in: childIds } }).populate('coach');
-      const coachMap = new Map();
-      suivis.forEach(suivi => {
-        if (suivi.coach && !coachMap.has(suivi.coach._id.toString())) {
-          coachMap.set(suivi.coach._id.toString(), suivi.coach);
-        }
-      });
-      return Array.from(coachMap.values());
+  async getAvailableCoaches(userId: string): Promise<any[]> {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('id invalide');
     }
+    const children = await this.usersService.getChildren(userId);
+    const childIds = children.map(child => child._id);
+    const suivis = await this.suiviModel.find({ enfant: { $in: childIds } }).populate('coach');
+    const coachMap = new Map();
+    suivis.forEach(suivi => {
+      if (suivi.coach && !coachMap.has(suivi.coach._id.toString())) {
+        coachMap.set(suivi.coach._id.toString(), suivi.coach);
+      }
+    });
+    return Array.from(coachMap.values());
+  }
 
 
   /**
@@ -208,18 +208,19 @@ export class SuiviEnfantService {
   // Helper to check whether a parent (by id) owns an enfant (by id)
   private async parentOwnsChild(parentId: string, enfantId: string): Promise<boolean> {
     if (!parentId || !enfantId) return false;
-    // Try to load the parent user and check their enfants array
     try {
-      const parent = await this.usersService.findById(parentId);
-      if (!parent) return false;
-      // normalize enfants array
-      const enfants = (parent as any).enfants || [];
-      for (const e of enfants) {
-        const id = this.extractId(e) || (typeof e === 'string' ? e : undefined);
-        if (id === enfantId) return true;
-      }
+      // 1. Check parentId as string
+      const pId = parentId.toString();
+      const eId = enfantId.toString();
+
+      // 2. Query children directly from the database for the most up-to-date check
+      const children = await this.usersService.getChildren(pId);
+      return children.some(c => {
+        const id = this.extractId(c._id) || (c._id ? c._id.toString() : '');
+        return id === eId;
+      });
     } catch (e) {
-      // ignore
+      this.logger.error(`Error in parentOwnsChild(parent=${parentId}, child=${enfantId}):`, e);
     }
     return false;
   }
@@ -345,28 +346,17 @@ export class SuiviEnfantService {
       const childCreatedBy = this.extractId((enfant as any).createdBy);
       this.logger.debug(`findByEnfant: enfantId=${enfantId} parent=${childParentId} createdBy=${childCreatedBy} requester=${currentUser.userId}`);
       // Primary check: parent or createdBy matches requester
-      let allowed = (childParentId === currentUser.userId) || (childCreatedBy === currentUser.userId);
-      // Fallback: check parent's enfants array (some records may only list children on the parent doc)
+      const reqId = currentUser.userId.toString();
+      let allowed = (childParentId === reqId) || (childCreatedBy === reqId);
+
+      // Fallback: check via usersService.getChildren
       if (!allowed) {
-        allowed = await this.parentOwnsChild(currentUser.userId, enfantId);
-        if (allowed) this.logger.debug(`findByEnfant: allowed by parent.enfants membership for requester=${currentUser.userId}`);
+        allowed = await this.parentOwnsChild(reqId, enfantId);
       }
-      // Additional fallback: check parent's children via usersService.getChildren
+
       if (!allowed) {
-        try {
-          const parentsChildren = await this.usersService.getChildren(currentUser.userId);
-          const ids = (parentsChildren || []).map((c: any) => this.extractId(c._id) || (c._id ? c._id.toString() : undefined)).filter(Boolean);
-          if (ids.includes(enfantId)) {
-            allowed = true;
-            this.logger.debug(`findByEnfant: allowed by usersService.getChildren for requester=${currentUser.userId}`);
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-      if (!allowed) {
-        this.logger.warn(`Unauthorized access attempt: requester=${currentUser.userId} tried to access enfant=${enfantId}`);
-        throw new ForbiddenException('Cet enfant n\'appartient pas à ce parent');
+        this.logger.warn(`Unauthorized findByEnfant: parent=${reqId} tried to access child=${enfantId} (child.parent=${childParentId}, child.createdBy=${childCreatedBy})`);
+        throw new ForbiddenException("Cet enfant n'appartient pas à ce parent");
       }
       return this.suiviModel
         .find({ $or: [{ enfant: new Types.ObjectId(enfantId) }, { 'enfant._id': new Types.ObjectId(enfantId) }] })
